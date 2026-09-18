@@ -46,6 +46,24 @@ OpenAI cloud runs with `reasoning_effort: none` because gpt-5.x rejects function
 
 ---
 
+## The client flow (whiteboard mock `mock.jpg`, `structure.md`)
+
+1. **Goals** (`web/src/pages/GoalsPage.tsx`): "Tell us your financial goal". Suggestions sit as desaturated ovals in
+   the goal box (confirm ✓ / edit ✎ / delete ✕): rules on the data first, then the LLM's personal ideas
+   (`mygoal/agent/goal_assistant.py`, `POST /goals/suggest`). A free sentence becomes a goal (`POST /goals/draft`);
+   the LLM may ask one question, and without an LLM a small parser asks for a missing amount. Goals carry
+   `status` (suggested | confirmed), `origin` (data | ai | user) and a `note` saying why. Only confirmed goals are
+   simulated in the overview and affect other goals.
+2. **Main** (`pages/MainPage.tsx`): the scenario (today's path vs what the goal needs, "+5m" late) and the action plan
+   (the engine's recommended levers, pre-selected on first visit, each a checkbox), plus the what-if box.
+   **Pro mode** is the full dashboard (fan chart with a worst-to-best future slider, levers, risk, advisor, data).
+3. **Facts** ("See the data we're working with", `pages/FactsPage.tsx`, `mygoal/facts.py`): money in - out = free
+   cash, life facts (known / assumed / you told us), assumptions about the future, all editable; a chat at the
+   bottom turns "my gross salary is 118k, we're expecting a baby" into edits and notes. Numbers only ever come from
+   the data or the client; the LLM reads, phrases and maps (`POST /facts`, `/facts/edit`, `/facts/chat`, `GET /facts/ai`).
+
+---
+
 ## The testdata: 8,000 people, and what a population adds
 
 `config/app.yaml` -> `data.source: testdata` (the default now; `synthetic` brings Lena back). The organisers' relational

@@ -24,6 +24,48 @@ export interface GoalSpec {
   target_date: string | null
   params: Record<string, number | string | boolean>
   priority: number
+  status?: 'suggested' | 'confirmed'
+  origin?: 'data' | 'ai' | 'user'
+  note?: string | null
+}
+
+export type DraftResult =
+  | { status: 'question'; question: string }
+  | { status: 'goal'; goal: GoalSpec }
+  | { status: 'error'; message: string }
+
+export interface Fact {
+  id: string
+  group: 'money' | 'life' | 'future' | 'notes'
+  kind: 'known' | 'assumed' | 'yours'
+  label: string
+  display: string
+  value: number | string | null
+  unit: string
+  source: Source | null
+  source_label: string | null
+  editable: boolean
+  input: 'number' | 'text' | 'none'
+  note: string | null
+  low?: number | null
+  high?: number | null
+  step?: number | null
+}
+
+export interface Facts {
+  money: Fact[]
+  life: Fact[]
+  future: Fact[]
+  notes: Fact[]
+  summary: { money_in: number; money_out: number; free_cash: number }
+  as_of: string
+  data_notes: { level: 'info' | 'warning'; message: string }[]
+}
+
+export interface FactsReading {
+  summary: string | null
+  observations: { text: string; basis?: string }[]
+  available: boolean
 }
 
 export interface WorstCaseSegment {
@@ -148,7 +190,7 @@ export interface Overview {
   texts: Record<string, string>
   spending: { category: string; label: string; monthly: number; fixed: number; variable: number; opaque: boolean }[]
   hints: { kind: string; label: string; monthly_cost: number; evidence: string[]; booking_ids: string[] }[]
-  goals: (GoalSpec & { status: { p_success: number; futures_of_10: number; p50: string | null; target_date: string; headline: string } })[]
+  goals: (GoalSpec & { status_info: { p_success: number; futures_of_10: number; p50: string | null; target_date: string; headline: string } | null })[]
   goal_types: string[]
   data_quality: { level: 'info' | 'warning'; message: string }[]
   recurring: RecurringGroup[]
@@ -267,4 +309,18 @@ export const api = {
   upsertGoal: (client: string, goal: GoalSpec) =>
     call<GoalSpec[]>(`/clients/${client}/goals/${goal.id}`, { method: 'PUT', body: JSON.stringify(goal) }),
   advisor: (client: string, goal: string, lang: string) => call<AdvisorAgenda>(`/clients/${client}/advisor?goal_id=${goal}&lang=${lang}`),
+  goals: (client: string) => call<GoalSpec[]>(`/clients/${client}/goals`),
+  deleteGoal: (client: string, goal: string) => call<GoalSpec[]>(`/clients/${client}/goals/${goal}`, { method: 'DELETE' }),
+  suggestGoals: (client: string, lang: string) =>
+    call<GoalSpec[]>(`/clients/${client}/goals/suggest`, { method: 'POST', body: JSON.stringify({ lang }) }),
+  draftGoal: (client: string, body: { text: string; lang: string; question?: string; answer?: string }) =>
+    call<DraftResult>(`/clients/${client}/goals/draft`, { method: 'POST', body: JSON.stringify(body) }),
+  facts: (client: string, overrides: Overrides, lang: string) =>
+    call<Facts>(`/clients/${client}/facts`, { method: 'POST', body: JSON.stringify({ overrides, lang }) }),
+  editFact: (client: string, id: string, value: number | string | null, overrides: Overrides, lang: string) =>
+    call<{ overrides: Overrides; facts: Facts }>(`/clients/${client}/facts/edit`, { method: 'POST', body: JSON.stringify({ id, value, overrides, lang }) }),
+  factsChat: (client: string, message: string, overrides: Overrides, lang: string) =>
+    call<{ reply: string; changed: string[]; overrides: Overrides; facts: Facts }>(`/clients/${client}/facts/chat`,
+      { method: 'POST', body: JSON.stringify({ message, overrides, lang }) }),
+  factsReading: (client: string, lang: string) => call<FactsReading>(`/clients/${client}/facts/ai?lang=${lang}`),
 }

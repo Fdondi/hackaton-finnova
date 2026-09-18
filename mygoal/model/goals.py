@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -17,3 +17,6 @@ class GoalSpec(BaseModel):
     target_date: date | None = None
     params: dict[str, Any] = Field(default_factory=dict)
     priority: int = 1
+    status: Literal["suggested", "confirmed"] = "confirmed"   # suggestions wait for the client's OK on the goals page
+    origin: Literal["data", "ai", "user"] = "user"            # rules on the bank's data, the LLM, or the client
+    note: str | None = None                                    # why it was suggested / how the amount was estimated

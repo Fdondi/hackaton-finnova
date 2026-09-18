@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
@@ -115,6 +116,10 @@ class ClientState:
     custom_levers: dict[str, CustomLever] = field(default_factory=dict)
     version: int = 0
     risk: Any = None                       # population.RiskProfile when the bank's population data is available
+    notes: list[dict[str, str]] = field(default_factory=list)   # life facts the client told us (facts page)
+    ai_suggested: bool = False             # the LLM already proposed goals for this client
+    ai_facts: dict[str, Any] = field(default_factory=dict)      # cached LLM reading of the data, per language
+    lock: Any = field(default_factory=threading.Lock)            # one LLM job per client at a time (pages call twice)
 
 
 def _h(obj: Any) -> str:
@@ -423,7 +428,7 @@ class PlanningService:
         when = scenario.target_date if scenario.p_success >= 0.7 else scenario.achieved.p50
         plugin = GOALS.get(goal.type)
         for other in st.goals:
-            if other.id == goal.id:
+            if other.id == goal.id or other.status != "confirmed":
                 continue
             opl = self.planner(client_id, other, glob, n_paths)
             other_base = opl.outcome([])
@@ -487,10 +492,13 @@ class PlanningService:
         base, market, _ = self.baseline(client_id)
         goals, breach = [], None
         for g in st.goals:
+            if g.status != "confirmed":           # suggestions aren't simulated until the client confirms them
+                goals.append({**g.model_dump(mode="json"), "status_info": None})
+                continue
             pl = self.planner(client_id, g, {}, None)
             o = pl.outcome([])
             breach = o.p_buffer_breach if breach is None else breach
-            goals.append({**g.model_dump(mode="json"), "status": {
+            goals.append({**g.model_dump(mode="json"), "status_info": {
                 "p_success": o.p_success, "futures_of_10": o.futures_of_10, "p50": o.achieved.p50,
                 "target_date": o.target_date,
                 "headline": self.goal_texts(g, o, o, None, None, Deadline(status="ok"), [], lang, base_line=pl.base)["headline"]}})

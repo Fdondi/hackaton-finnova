@@ -28,3 +28,11 @@ export function formatValue(value: number, unit: string): string {
   if (unit.startsWith('CHF')) return `${chf(value)}${unit.slice(3)}`
   return `${Number.isInteger(value) ? value.toLocaleString('en-US').replace(/,/g, '’') : value.toFixed(2)} ${unit}`
 }
+
+/** "+3y", "+1y 4m", "+5m", "on time". */
+export function delayLabel(months: number | null, t: (key: string, vars?: Record<string, string | number>, fallback?: string) => string): string {
+  if (months === null) return t('flow.not_reached', {}, 'not reached')
+  if (months <= 0) return t('flow.on_time', {}, 'on time')
+  const y = Math.floor(months / 12), m = months % 12
+  return `+${y ? `${y}y` : ''}${y && m ? ' ' : ''}${m ? `${m}m` : ''}`
+}

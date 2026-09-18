@@ -63,6 +63,32 @@ class AnswerRequest(BaseModel):
     answer: str
 
 
+class LangRequest(BaseModel):
+    lang: str = "en"
+    use_llm: bool = True
+
+
+class DraftRequest(BaseModel):
+    text: str
+    lang: str = "en"
+    question: str | None = None
+    answer: str | None = None
+
+
+class FactsRequest(BaseModel):
+    overrides: dict[str, dict[str, float]] = {}
+    lang: str = "en"
+
+
+class FactEdit(FactsRequest):
+    id: str
+    value: float | str | None = None
+
+
+class FactsChat(FactsRequest):
+    message: str
+
+
 @app.get("/api/health")
 def health():
     return {"ok": True}
@@ -121,6 +147,60 @@ def upsert_goal(client_id: str, goal_id: str, goal: GoalSpec):
         return svc().upsert_goal(client_id, goal)
     except (KeyError, ValueError) as exc:
         raise HTTPException(422, str(exc)) from exc
+
+
+@app.get("/api/clients/{client_id}/goals")
+def goals(client_id: str):
+    return _client(client_id).goals
+
+
+@app.post("/api/clients/{client_id}/goals/suggest")
+def suggest_goals(client_id: str, req: LangRequest):
+    """Rules on the data plus (once per client) the LLM's ideas, added as suggested goals."""
+    _client(client_id)
+    from ..agent.goal_assistant import suggest
+    return suggest(svc(), client_id, req.lang, use_llm=req.use_llm)
+
+
+@app.post("/api/clients/{client_id}/goals/draft")
+def draft_goal(client_id: str, req: DraftRequest):
+    """One sentence -> a suggested goal, or one question first."""
+    _client(client_id)
+    from ..agent.goal_assistant import draft
+    return draft(svc(), client_id, req.text, req.lang, req.question, req.answer)
+
+
+@app.post("/api/clients/{client_id}/facts")
+def facts(client_id: str, req: FactsRequest):
+    _client(client_id)
+    from .. import facts as f
+    return f.build(svc(), client_id, req.overrides, req.lang)
+
+
+@app.post("/api/clients/{client_id}/facts/edit")
+def edit_fact(client_id: str, req: FactEdit):
+    _client(client_id)
+    from .. import facts as f
+    try:
+        overrides = f.apply(svc(), client_id, req.id, req.value, req.overrides)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return {"overrides": overrides, "facts": f.build(svc(), client_id, overrides, req.lang)}
+
+
+@app.post("/api/clients/{client_id}/facts/chat")
+def facts_chat(client_id: str, req: FactsChat):
+    _client(client_id)
+    from .. import facts as f
+    return f.chat(svc(), client_id, req.message, req.overrides, req.lang)
+
+
+@app.get("/api/clients/{client_id}/facts/ai")
+def facts_ai(client_id: str, lang: str = "en"):
+    """The LLM's plain-words reading of the data (slow: the page loads it after the facts)."""
+    _client(client_id)
+    from .. import facts as f
+    return f.read(svc(), client_id, lang)
 
 
 @app.delete("/api/clients/{client_id}/goals/{goal_id}")

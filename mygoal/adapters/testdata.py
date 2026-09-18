@@ -177,7 +177,8 @@ class TestdataSource:
             "wallet_share": r["wallet_share"], "owns_property": bool(r["owns_property"]),
             "property_value": r["property_value"], "mortgage_outstanding": r["mortgage_outstanding"],
             "health_conditions": [h for h in (r["health_conditions"] or "").split(",") if h],
-            "story": story, "renter": has_rent,
+            "story": story, "renter": has_rent, "sex": r["sex"],
+            "interests": json.loads(r["interests"]) if "interests" in r and r["interests"] else [],
             "adapter_notes": [f"Test data dates moved forward {self.shift} months so the latest month is "
                               f"{as_of:%b %Y} (source data ends {period_to_date(self.meta['last_period']):%b %Y})"]
                              if self.shift else [],
@@ -206,11 +207,14 @@ class TestdataSource:
             price = max(s["min_price"], min(price, s["max_income_multiple"] * gross_estimate)) if gross_estimate else price
             goals.append(GoalSpec(id=s["id"], type="home", label=s["label"].format(canton=client.canton or ""),
                                   target_date=add_months(as_of.replace(day=1), 12 * s["years"]),
-                                  params={"price": round(price, -4), "canton": client.canton}))
+                                  params={"price": round(price, -4), "canton": client.canton}, status="suggested", origin="data",
+                                  note="You rent; typical price of homes owned by the bank's clients in your canton"))
         if (s := seeds.get("travel")) and applies(s["when"]):
             goals.append(GoalSpec(id=s["id"], type="target", label=s["label"], priority=2,
-                                  target_date=add_months(as_of.replace(day=1), 12 * s["years"]), params={"amount": s["amount"]}))
+                                  target_date=add_months(as_of.replace(day=1), 12 * s["years"]), params={"amount": s["amount"]},
+                                  status="suggested", origin="data", note="Travel is one of your interests"))
         if (s := seeds.get("retirement")) and applies(s["when"]):
             goals.append(GoalSpec(id=s["id"], type="retirement", label=s["label"], priority=3,
-                                  params={"retirement_age": s["retirement_age"]}))
+                                  params={"retirement_age": s["retirement_age"]}, status="suggested", origin="data",
+                                  note="Everyone working needs this one"))
         return goals

@@ -132,6 +132,8 @@ def build_clients(ind, st, emp, life, bookings, window) -> pd.DataFrame:
         "mortgage_monthly": attrs.map(lambda a: a.get("mortgage_monthly")),
         "fixed_rent": attrs.map(lambda a: a.get("fixed_rent")),
         "interest_travel": attrs.map(lambda a: (a.get("interests") or {}).get("Reisen")),
+        "interests": attrs.map(lambda a: json.dumps([k for k, v in sorted((a.get("interests") or {}).items(), key=lambda kv: -kv[1])
+                                                     if v >= 0.6][:4], ensure_ascii=False)),
         "health_conditions": attrs.map(lambda a: ",".join(a.get("health_conditions") or [])),
         "churn_reason": attrs.map(lambda a: a.get("churn_reason")),
         "onboarded_period": attrs.map(lambda a: a.get("onboarded_period")),
@@ -416,6 +418,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--src", default=str(ROOT / "testdata" / "testdata"))
     ap.add_argument("--out", default=str(ROOT / "data" / "testdata"))
+    ap.add_argument("--reset-shortlist", action="store_true", help="overwrite an engine-ranked shortlist.json")
     args = ap.parse_args()
     src, out = Path(args.src), Path(args.out)
     (out / "population").mkdir(parents=True, exist_ok=True)
@@ -457,7 +460,9 @@ def main() -> None:
     prices = property_prices(clients)
     (out / "population" / "prices.json").write_text(json.dumps(prices, indent=1, ensure_ascii=False))
     picks = shortlist(clients, w, life, acc)
-    (out / "shortlist.json").write_text(json.dumps(picks, indent=1, ensure_ascii=False))
+    ranked = out / "shortlist.json"
+    if args.reset_shortlist or not ranked.exists() or '"score"' not in ranked.read_text(encoding="utf-8"):
+        ranked.write_text(json.dumps(picks, indent=1, ensure_ascii=False))   # keep an engine-ranked shortlist
     (out / "candidates.json").write_text(json.dumps(shortlist(clients, w, life, acc, per_tag=40), indent=1, ensure_ascii=False))
     meta = {"window": list(window), "last_period": last, "period_formula": "year=(p-1)//12, month=(p-1)%12+1",
             "rows": {"bookings": len(bookings), "clients": len(clients), "accounts": len(accounts), "events": len(events)},

@@ -1,5 +1,5 @@
-import { Bot, Briefcase, Database, Languages, User } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ArrowLeft, Bot, Briefcase, Database, Languages, User } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, type CrossGoalEffect, type GoalSpec, type Overrides, type Overview, type PlanResponse } from './api'
 import { AdvisorView } from './components/AdvisorView'
 import { DataInsightsView } from './components/DataInsightsView'
@@ -11,6 +11,9 @@ import { StandTiles } from './components/StandTiles'
 import { WhatIfBox } from './components/WhatIfBox'
 import { WhyDrawer } from './components/WhyDrawer'
 import { I18nContext, useT, type Strings } from './i18n'
+import { FactsPage } from './pages/FactsPage'
+import { GoalsPage } from './pages/GoalsPage'
+import { MainPage } from './pages/MainPage'
 
 function stored(key: string, fallback: string) {
   try { return localStorage.getItem(key) ?? fallback } catch { return fallback }
@@ -48,10 +51,14 @@ export default function App() {
   )
 }
 
+type Page = 'goals' | 'main' | 'facts' | 'pro'
+
 function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }) {
   const { t } = useT()
   const [clients, setClients] = useState<{ id: string; name: string }[]>([])
   const [clientId, setClientId] = useState<string | null>(null)
+  const [page, setPage] = useState<Page>('goals')
+  const [factsFrom, setFactsFrom] = useState<Page>('goals')
   const [overview, setOverview] = useState<Overview | null>(null)
   const [goalId, setGoalId] = useState<string | null>(null)
   const [active, setActive] = useState<string[]>([])
@@ -65,26 +72,30 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
   const [view, setView] = useState<'client' | 'advisor' | 'data'>('client')
   const [version, setVersion] = useState(0)
   const [llm, setLlm] = useState<{ available: boolean; provider: string | null; model: string | null } | null>(null)
+  const autoPlanned = useRef(new Set<string>())   // goals whose action plan we already pre-selected once
 
   useEffect(() => {
     api.clients().then((cs) => { setClients(cs); setClientId((cur) => cur ?? cs[0]?.id ?? null) })
     api.meta().then((m) => setLlm(m.llm))
   }, [])
 
+  const confirmed = useMemo(() => overview?.goals.filter((g) => g.status !== 'suggested') ?? [], [overview])
+
   useEffect(() => {
     if (!clientId) return
     api.overview(clientId, lang).then((ov) => {
       setOverview(ov)
-      setGoalId((g) => (g && ov.goals.some((x) => x.id === g) ? g : ov.goals[0]?.id ?? null))
+      const ok = ov.goals.filter((g) => g.status !== 'suggested')
+      setGoalId((g) => (g && ok.some((x) => x.id === g) ? g : ok[0]?.id ?? null))
     })
   }, [clientId, lang, version])
 
-  useEffect(() => { setActive([]); setOverrides({}); setPlan(null) }, [clientId])
+  useEffect(() => { setActive([]); setOverrides({}); setPlan(null); setPage('goals'); setView('client'); autoPlanned.current.clear() }, [clientId])
   useEffect(() => { setActive([]); setOverrides((o) => ({ global: o.global ?? {} })) }, [goalId])
 
-  // Re-simulate on every change; hold the previous render (dimmed) while the new one loads.
+  // Re-simulate on every change (main and pro pages); hold the previous render (dimmed) while the new one loads.
   useEffect(() => {
-    if (!clientId || !goalId) return
+    if (!clientId || !goalId || (page !== 'main' && page !== 'pro')) return
     const ctrl = new AbortController()
     const timer = setTimeout(async () => {
       setLoading(true)
@@ -94,6 +105,12 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
         const p = await api.plan(clientId, { ...body, include_cross_goal: false }, ctrl.signal)
         setPlan(p)
         setLoading(false)
+        if (!autoPlanned.current.has(goalId) && active.length === 0 && p.plan.length) {
+          autoPlanned.current.add(goalId)       // first visit: show the goal with the action plan applied
+          setActive(p.plan)
+          return
+        }
+        autoPlanned.current.add(goalId)
         setCrossLoading(true)
         const c = await api.crossGoal(clientId, body, ctrl.signal)
         setCross(c)
@@ -103,7 +120,7 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
       }
     }, 150)
     return () => { clearTimeout(timer); ctrl.abort() }
-  }, [clientId, goalId, active, overrides, lang, version])
+  }, [clientId, goalId, active, overrides, lang, version, page])
 
   const toggle = useCallback((id: string, on: boolean) => setActive((a) => (on ? [...a.filter((x) => x !== id), id] : a.filter((x) => x !== id))), [])
   const setOverride = useCallback((scope: string, key: string, value: number | null) => {
@@ -114,8 +131,11 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
       return next
     })
   }, [])
+  const addLever = useCallback((id: string) => { setActive((a) => (a.includes(id) ? a : [...a, id])); setVersion((v) => v + 1) }, [])
+  const openFacts = () => { setFactsFrom(page); setPage('facts') }
 
   const whyLever = useMemo(() => (why && why !== 'global' ? plan?.levers.find((l) => l.lever_id === why) : undefined), [why, plan])
+  const planReady = plan && goalId && plan.goal.id === goalId
 
   return (
     <div className="min-h-screen">
@@ -132,11 +152,13 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           )}
-          <div className="flex rounded-lg border border-line p-0.5 text-sm">
-            <button onClick={() => setView('client')} className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 ${view === 'client' ? 'bg-surface-2 font-medium' : 'text-ink-2'}`}><User size={14} />{t('ui.client_view')}</button>
-            <button onClick={() => setView('advisor')} className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 ${view === 'advisor' ? 'bg-surface-2 font-medium' : 'text-ink-2'}`}><Briefcase size={14} />{t('ui.advisor_view')}</button>
-            <button onClick={() => setView('data')} className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 ${view === 'data' ? 'bg-surface-2 font-medium' : 'text-ink-2'}`}><Database size={14} />{t('ui.data_view', {}, 'Data')}</button>
-          </div>
+          {page === 'pro' && (
+            <div className="flex rounded-lg border border-line p-0.5 text-sm">
+              <button onClick={() => setView('client')} className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 ${view === 'client' ? 'bg-surface-2 font-medium' : 'text-ink-2'}`}><User size={14} />{t('ui.client_view')}</button>
+              <button onClick={() => setView('advisor')} className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 ${view === 'advisor' ? 'bg-surface-2 font-medium' : 'text-ink-2'}`}><Briefcase size={14} />{t('ui.advisor_view')}</button>
+              <button onClick={() => setView('data')} className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 ${view === 'data' ? 'bg-surface-2 font-medium' : 'text-ink-2'}`}><Database size={14} />{t('ui.data_view', {}, 'Data')}</button>
+            </div>
+          )}
           <button onClick={() => setLang(lang === 'en' ? 'de' : 'en')} className="inline-flex items-center gap-1 rounded-lg border border-line px-2.5 py-1.5 text-sm" aria-label="Language">
             <Languages size={14} />{lang === 'en' ? 'DE' : 'EN'}
           </button>
@@ -146,35 +168,50 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
             </span>
           )}
         </div>
-        {overview && view !== 'data' && (
+        {overview && (page === 'main' || (page === 'pro' && view !== 'data')) && confirmed.length > 0 && (
           <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-4 pb-2">
-            {overview.goals.map((g) => (
+            {confirmed.map((g) => (
               <button key={g.id} onClick={() => setGoalId(g.id)}
                 className={`flex shrink-0 items-center gap-2 rounded-full border px-3 py-1 text-sm ${g.id === goalId ? 'border-accent bg-accent-wash text-accent' : 'border-line text-ink-2 hover:bg-surface-2'}`}>
-                <span className={`h-2 w-2 rounded-full ${g.status.p_success >= 0.7 ? 'bg-good' : 'bg-warning'}`} aria-hidden />
+                {g.status_info && <span className={`h-2 w-2 rounded-full ${g.status_info.p_success >= 0.7 ? 'bg-good' : 'bg-warning'}`} aria-hidden />}
                 {g.label}
-                <span className="text-xs text-muted tabular">{g.status.futures_of_10}/10</span>
+                {g.status_info && <span className="text-xs text-muted tabular">{g.status_info.futures_of_10}/10</span>}
               </button>
             ))}
           </div>
         )}
       </header>
 
-      <main className="mx-auto max-w-7xl space-y-4 px-4 py-4">
-        {error && <div className="rounded-xl border border-critical/40 bg-critical/10 p-3 text-sm text-critical">{error}</div>}
-        {!overview || !clientId ? (
-          <div className="p-10 text-ink-2">{t('ui.thinking', {}, 'Loading…')}</div>
-        ) : view === 'advisor' && goalId ? (
-          <AdvisorView clientId={clientId} goalId={goalId} />
-        ) : view === 'data' ? (
-          <DataInsightsView clientId={clientId} overview={overview} />
-        ) : (
-          <>
-            <div>
-              <h2 className="mb-2 text-sm font-semibold text-ink-2">{t('ui.where_you_stand')} · {overview.client.name}</h2>
-              <StandTiles ov={overview} />
-            </div>
-            {plan && goalId ? (
+      {error && <div className="mx-auto mt-4 max-w-5xl rounded-xl border border-critical/40 bg-critical/10 p-3 text-sm text-critical">{error}</div>}
+      {!clientId || !overview ? (
+        <div className="p-10 text-ink-2">{t('ui.thinking', {}, 'Loading…')}</div>
+      ) : page === 'goals' ? (
+        <GoalsPage clientId={clientId} name={overview.client.name?.split(' ')[0] ?? ''}
+          onContinue={(id) => { setGoalId(id); setVersion((v) => v + 1); setPage('main') }} onFacts={openFacts} />
+      ) : page === 'facts' ? (
+        <FactsPage clientId={clientId} overrides={overrides} onOverrides={setOverrides} onChanged={() => setVersion((v) => v + 1)}
+          onBack={() => setPage(factsFrom === 'facts' ? 'goals' : factsFrom)} />
+      ) : !planReady ? (
+        <div className="p-10 text-ink-2">{t('ui.thinking', {}, 'Loading…')}</div>
+      ) : page === 'main' ? (
+        <MainPage clientId={clientId} plan={plan} cross={cross} active={active} loading={loading || crossLoading}
+          onToggle={toggle} onWhy={setWhy} onLever={addLever} onPro={() => setPage('pro')} onFacts={openFacts} onGoals={() => setPage('goals')} />
+      ) : (
+        <main className="mx-auto max-w-7xl space-y-4 px-4 py-4">
+          <div className="flex flex-wrap items-center gap-4 text-sm">
+            <button onClick={() => setPage('main')} className="inline-flex items-center gap-1 text-accent hover:underline"><ArrowLeft size={14} />{t('flow.simple_view', {}, 'Simple view')}</button>
+            <button onClick={openFacts} className="inline-flex items-center gap-1 text-accent hover:underline"><Database size={14} />{t('flow.see_data', {}, "See the data we're working with")}</button>
+          </div>
+          {view === 'advisor' ? (
+            <AdvisorView clientId={clientId} goalId={goalId!} />
+          ) : view === 'data' ? (
+            <DataInsightsView clientId={clientId} overview={overview} />
+          ) : (
+            <>
+              <div>
+                <h2 className="mb-2 text-sm font-semibold text-ink-2">{t('ui.where_you_stand')} · {overview.client.name}</h2>
+                <StandTiles ov={overview} />
+              </div>
               <div className={`grid gap-4 transition-opacity lg:grid-cols-12 ${loading ? 'opacity-60' : ''}`}>
                 <div className="lg:col-span-7">
                   <GoalCard plan={plan} cross={cross} crossLoading={crossLoading} anyActive={active.length > 0}
@@ -187,19 +224,16 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
                   <LeverPanel plan={plan} onToggle={toggle} onUsePlan={() => setActive(plan.plan)} onClear={() => setActive([])}
                     onWhy={setWhy}
                     onRemove={async (id) => { await api.removeLever(clientId, id); setActive((a) => a.filter((x) => x !== id)); setVersion((v) => v + 1) }}>
-                    <WhatIfBox clientId={clientId} goalId={goalId}
-                      onLever={(id) => { setActive((a) => (a.includes(id) ? a : [...a, id])); setVersion((v) => v + 1) }} />
+                    <WhatIfBox clientId={clientId} goalId={goalId!} onLever={addLever} />
                   </LeverPanel>
                 </div>
               </div>
-            ) : (
-              <div className="p-10 text-ink-2">{t('ui.thinking', {}, 'Loading…')}</div>
-            )}
-          </>
-        )}
-      </main>
+            </>
+          )}
+        </main>
+      )}
 
-      {why && plan && (
+      {why && plan && (page === 'main' || page === 'pro') && (
         why === 'global' ? (
           <WhyDrawer title={t('ui.assumptions')} assumptions={plan.assumptions} notes={overview?.data_quality}
             onChange={(k, v) => setOverride('global', k, v)} onClose={() => setWhy(null)} />

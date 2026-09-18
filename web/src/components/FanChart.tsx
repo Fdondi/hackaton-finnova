@@ -1,27 +1,25 @@
 import { ChartLine, ChevronDown, Table2, TriangleAlert } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { GoalOutcome } from '../api'
 import { chf, chfCompact, monthLabel } from '../format'
 import { useT } from '../i18n'
+import { useTokens } from './tokens'
 
-const VARS = ['--series-1', '--series-2', '--muted', '--grid', '--axis', '--ink', '--ink-2', '--surface', '--critical'] as const
-
-/** Chart colors are CSS tokens; SVG attributes need resolved values, re-read when the color scheme flips. */
-function useTokens() {
-  const read = () => Object.fromEntries(VARS.map((v) => [v, getComputedStyle(document.documentElement).getPropertyValue(v).trim()]))
-  const [tokens, setTokens] = useState<Record<string, string>>(read)
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const on = () => setTokens(read())
-    mq.addEventListener('change', on)
-    return () => mq.removeEventListener('change', on)
-  }, [])
-  return tokens
-}
+// The sketch's pro-mode slider: one future at a time, from the worst of 1,000 to the best.
+const PICKS = [
+  { key: 'p_min', label: 'Worst of 1,000', when: null },
+  { key: 'p10', label: 'Bad (1 in 10)', when: 'p90' },
+  { key: 'p25', label: 'Below average', when: null },
+  { key: 'p50', label: 'Typical', when: 'p50' },
+  { key: 'p75', label: 'Above average', when: null },
+  { key: 'p90', label: 'Good (1 in 10)', when: 'p10' },
+  { key: 'p_max', label: 'Best of 1,000', when: null },
+] as const
 
 interface Row {
   d: string
+  pick?: number
   bandFull: [number, number]
   band80: [number, number]
   band50: [number, number]
@@ -39,15 +37,17 @@ export function FanChart({ scenario, baseline, showBaseline }: { scenario: GoalO
   const [table, setTable] = useState(false)
   const [worstOpen, setWorstOpen] = useState(false)
   const [hoverSeg, setHoverSeg] = useState<number | null>(null)
+  const [pick, setPick] = useState(3)
   const fan = scenario.fan
   const rows: Row[] = useMemo(() => {
     if (!fan) return []
     const base = new Map((baseline.fan?.dates ?? []).map((d, i) => [d, baseline.fan!.p50[i]]))
+    const series = fan[PICKS[pick].key]
     return fan.dates.map((d, i) => ({
       d, bandFull: [fan.p_min[i], fan.p_max[i]], band80: [fan.p10[i], fan.p90[i]], band50: [fan.p25[i], fan.p75[i]],
-      p50: fan.p50[i], need: fan.need[i], base: base.get(d),
+      p50: fan.p50[i], need: fan.need[i], base: base.get(d), pick: pick === 3 ? undefined : series[i],
     }))
-  }, [fan, baseline.fan])
+  }, [fan, baseline.fan, pick])
   if (!fan) return null
   const years = rows.filter((r, i) => i === 0 || r.d.slice(0, 4) !== rows[i - 1].d.slice(0, 4)).map((r) => r.d).slice(1)
   const step = Math.max(1, Math.ceil(years.length / 8))
@@ -168,10 +168,28 @@ export function FanChart({ scenario, baseline, showBaseline }: { scenario: GoalO
               {showBaseline && <Line dataKey="base" stroke={c['--muted']} strokeWidth={1.5} dot={false} isAnimationActive={false} />}
               <Line dataKey="need" stroke={c['--series-2']} strokeWidth={2} dot={false} isAnimationActive={false} />
               <Line dataKey="p50" stroke={c['--series-1']} strokeWidth={2} dot={false} isAnimationActive={false} />
+              {pick !== 3 && <Line dataKey="pick" stroke={pick < 3 ? c['--critical'] : c['--good']} strokeWidth={3} dot={false} isAnimationActive={false} />}
               <ReferenceLine x={target} stroke={c['--ink-2']} strokeWidth={1}
                 label={{ value: `${t('ui.target')} ${monthLabel(target, months())}`, position: 'top', fill: c['--ink-2'], fontSize: 12 }} />
             </ComposedChart>
           </ResponsiveContainer>
+        </div>
+      )}
+      {!table && (
+        <div className="mt-3 rounded-lg bg-surface-2 px-3 py-2">
+          <div className="flex items-center justify-between text-xs text-ink-2">
+            <span>{t('flow.show_one_future', {}, 'Show one future')}</span>
+            <span className={`font-medium ${pick < 3 ? 'text-critical' : pick > 3 ? 'text-good-text' : 'text-ink'}`}>
+              {t(`flow.pick_${PICKS[pick].key}`, {}, PICKS[pick].label)}
+              {PICKS[pick].when && ` · ${t('flow.goal_reached', {}, 'goal reached')} ${monthLabel(scenario.achieved[PICKS[pick].when as 'p10' | 'p50' | 'p90'], months())}`}
+            </span>
+          </div>
+          <div className="mt-1 flex items-center gap-2 text-xs text-muted">
+            <span>{t('flow.worst', {}, 'worst')}</span>
+            <input type="range" min={0} max={PICKS.length - 1} step={1} value={pick} onChange={(e) => setPick(Number(e.target.value))}
+              className="flex-1" aria-label={t('flow.show_one_future', {}, 'Show one future')} />
+            <span>{t('flow.best', {}, 'best')}</span>
+          </div>
         </div>
       )}
     </div>

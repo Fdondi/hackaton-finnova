@@ -1,0 +1,255 @@
+"""Goals page: suggest goals from the client's situation, and turn one sentence into a goal (one question allowed).
+
+The LLM proposes and phrases. Amounts it has to make up are rough typical Swiss prices, shown as editable estimates;
+the engine still does every calculation. Without an LLM, rules on the data and a small parser keep the page working.
+Every goal is validated by its goal plugin before it reaches the client.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import re
+from datetime import date
+from typing import TYPE_CHECKING, Any
+
+from ..goals import GOALS, parse_params
+from ..llm import get_llm
+from ..model import GoalSpec, add_months, month_start
+
+if TYPE_CHECKING:
+    from ..service import PlanningService
+
+log = logging.getLogger("mygoal.agent")
+
+GOAL_TYPES = {"home": "buying a home (amount = property price)", "target": "any purchase or saving target (amount = total cost)",
+              "retirement": "retiring at an age (retirement_age)"}
+
+SUGGEST_SYSTEM = """You suggest financial life goals for one bank client, based on their situation. Output JSON only:
+{{"goals": [{{"type": "home|target|retirement", "label": "max 40 chars", "amount": CHF, "years": years from today,
+"retirement_age": only for retirement, "reason": "one short sentence that refers to their situation"}}]}}
+Suggest {n} goals that fit this person, concrete and personal: a teenager gets a games console, someone over 50 early
+retirement, a renter with savings a home, a wealthy car lover a sports car, parents an education fund. Amounts are rough
+typical Swiss prices (they will be shown as editable estimates). Don't repeat these existing goals: {existing}.
+Write label and reason in {language}. Goal types: {types}."""
+
+DRAFT_SYSTEM = """You turn a bank client's sentence into exactly one financial goal. Output JSON only, one of:
+{{"goal": {{"type": "home|target|retirement", "label": "max 40 chars", "amount": CHF, "years": years from today,
+"retirement_age": only for retirement, "reason": "one sentence: what you understood and what you estimated"}}}}
+{{"question": "one short question"}}
+Ask a question only if something essential is missing that you cannot reasonably estimate; {question_rule}
+If the client gives no amount, estimate a typical Swiss price and say so in the reason. Today is {today}.
+Write label, reason and question in {language}. Goal types: {types}."""
+
+
+def _json(text: str) -> dict:
+    """The first JSON object in an LLM reply (tolerates code fences and chatter)."""
+    m = re.search(r"\{.*\}", text or "", re.S)
+    if not m:
+        raise ValueError("no JSON in reply")
+    return json.loads(m.group(0))
+
+
+def _slug(label: str, taken: set[str]) -> str:
+    base = re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_")[:24] or "goal"
+    slug, i = base, 2
+    while slug in taken:
+        slug, i = f"{base}_{i}", i + 1
+    return slug
+
+
+def situation(svc: "PlanningService", client_id: str) -> dict[str, Any]:
+    """What the LLM may know about the client: compact, rounded, no raw bookings."""
+    st = svc.state(client_id)
+    p, c = st.profile, st.ds.client
+    x = c.extra
+    kids = [p.as_of.year - y for y in c.household.children_birth_years]
+    return {
+        "today": p.as_of.isoformat(), "age": p.age, "sex": x.get("sex"), "canton": c.canton, "city": x.get("city"),
+        "occupation": x.get("occupation"), "employment": x.get("employment_type"), "married": c.household.adults >= 2,
+        "children_ages": kids, "interests": x.get("interests", []),
+        "net_income_monthly": round(p.income.salary_net_monthly_avg + p.income.other_income_monthly),
+        "spending_monthly": round(p.spending_monthly), "free_cash_monthly": round(p.free_cash_flow_monthly),
+        "cash": round(p.balances.liquid), "invested": round(p.balances.invested), "pillar3a": round(p.balances.p3a),
+        "owns_home": bool(x.get("owns_property")), "rent_monthly": round(p.monthly("housing")) if x.get("renter") else None,
+        "has_car": p.hint("car") is not None, "top_spending": [f.label for f in p.flows if f.kind == "spending"][:5],
+        "notes_from_client": [n["text"] for n in st.notes],
+    }
+
+
+def to_goal(d: dict, as_of: date, canton: str | None, taken: set[str], origin: str, status: str = "suggested") -> GoalSpec | None:
+    """Validate one LLM/rule goal dict into a GoalSpec (None if it doesn't make sense)."""
+    typ = d.get("type")
+    if typ not in GOAL_TYPES:
+        return None
+    label = str(d.get("label") or "").strip()[:60] or {"home": "Own home", "retirement": "Retirement"}.get(typ, "My goal")
+    start = month_start(as_of)
+    if typ == "retirement":
+        age = int(float(d.get("retirement_age") or 65))
+        params, when = {"retirement_age": max(50, min(age, 70))}, None
+    else:
+        amount = float(d.get("amount") or 0)
+        if amount <= 0:
+            return None
+        years = float(d.get("years") or (5 if typ == "home" else 2))
+        when = add_months(start, max(1, round(years * 12)))
+        params = {"price": round(amount, -3), "canton": canton} if typ == "home" else {"amount": round(amount, -1)}
+    goal = GoalSpec(id=_slug(label, taken), type=typ, label=label, target_date=when, params=params, status=status, origin=origin,
+                    note=(str(d.get("reason") or "").strip()[:200] or None))
+    parse_params(GOALS.get(typ), goal)          # raises if the plugin disagrees
+    return goal
+
+
+# ---------------------------------------------------------------------------------------------------- suggestions
+def rule_suggestions(svc: "PlanningService", client_id: str) -> list[dict]:
+    """Personal suggestions that need no LLM (on top of the adapter's data-based seeds)."""
+    s = situation(svc, client_id)
+    age, out = s["age"] or 40, []
+    if age < 18:
+        out.append({"type": "target", "label": "A new games console", "amount": 600, "years": 0.5,
+                    "reason": "Saved from pocket money in about half a year"})
+    if age >= 50 and s["employment"] in ("employed", "self_employed"):
+        out.append({"type": "retirement", "label": "Retire early at 60", "retirement_age": 60,
+                    "reason": f"At {age}, early retirement is the big question"})
+    if s["children_ages"]:
+        out.append({"type": "target", "label": "Education fund for the kids", "amount": 15_000 * len(s["children_ages"]),
+                    "years": max(1, 18 - min(s["children_ages"])), "reason": "Ready when your children start their education"})
+    if s["has_car"] and s["cash"] + s["invested"] > 250_000:
+        out.append({"type": "target", "label": "A sports car", "amount": 180_000, "years": 2,
+                    "reason": "You drive, and you have the savings for a dream car"})
+    if s["spending_monthly"] and s["cash"] < 3 * s["spending_monthly"] and age >= 18:
+        out.append({"type": "target", "label": "Safety cushion of 3 months", "amount": 3 * s["spending_monthly"], "years": 1,
+                    "reason": "Your cash covers less than three months of spending"})
+    return out
+
+
+def suggest(svc: "PlanningService", client_id: str, lang: str = "en", use_llm: bool = True) -> list[GoalSpec]:
+    """Add suggestions to the client's goal list (rules always, the LLM once per client). Returns the full list."""
+    st = svc.state(client_id)
+    with st.lock:           # a second call waits for the first one's LLM ideas instead of returning without them
+        return _suggest(svc, client_id, st, lang, use_llm)
+
+
+_GENERIC = {"fund", "your", "with", "from", "goal", "save", "saving", "savings", "plan", "family", "für", "eine", "einen",
+            "own", "new", "neue", "neuen", "kids", "children"}
+
+
+def _same_idea(a: GoalSpec, b: GoalSpec) -> bool:
+    """Near-duplicates: one home is enough, same retirement age, or a target sharing a meaningful word."""
+    if a.type != b.type:
+        return False
+    if a.type == "home":
+        return True
+    if a.type == "retirement":
+        return a.params.get("retirement_age") == b.params.get("retirement_age")
+    words = lambda g: {w for w in re.findall(r"[a-zäöüéè]+", g.label.lower()) if len(w) >= 4 and w not in _GENERIC}  # noqa: E731
+    return bool(words(a) & words(b))
+
+
+def _suggest(svc: "PlanningService", client_id: str, st, lang: str, use_llm: bool) -> list[GoalSpec]:
+    as_of, canton = st.profile.as_of, st.ds.client.canton
+    def key(g: dict | GoalSpec) -> tuple:
+        get = g.get if isinstance(g, dict) else lambda k, default=None: getattr(g, k, None) or g.params.get(k, default)
+        if get("type") == "retirement":
+            return ("retirement", int(float(get("retirement_age", 65) or 65)))
+        return (get("type"), str(get("label") or "").lower())
+
+    known = {key(g) for g in st.goals}
+    ideas: list[tuple[dict, str]] = [(d, "data") for d in rule_suggestions(svc, client_id)]
+    llm = get_llm(svc.cfg) if use_llm and not st.ai_suggested else None
+    if llm is not None:
+        st.ai_suggested = True
+        existing = ", ".join(g.label for g in st.goals) or "none"
+        system = SUGGEST_SYSTEM.format(n=4, existing=existing, language="German" if lang == "de" else "English",
+                                       types=json.dumps(GOAL_TYPES))
+        try:
+            ideas += [(d, "ai") for d in _json(llm.complete(system, json.dumps(situation(svc, client_id)), 1500)).get("goals", [])]
+        except Exception as exc:  # the page still works with the rules' ideas
+            log.warning("goal suggestions failed: %s", exc)
+    for d, origin in ideas:
+        if key(d) in known or len([g for g in st.goals if g.status == "suggested"]) >= 6:
+            continue
+        try:
+            g = to_goal(d, as_of, canton, {x.id for x in st.goals}, origin)
+        except Exception:
+            g = None
+        if g is not None and not any(_same_idea(x, g) for x in st.goals):
+            st.goals.append(g)
+            known.add(key(g))
+    st.version += 1
+    return st.goals
+
+
+# ---------------------------------------------------------------------------------------------------- one sentence -> goal
+_AMOUNT = re.compile(r"(?:chf|fr\.?)?\s*(\d[\d'’.,]*)\s*(k|tausend|thousand|mio|million)?\s*(?:chf|fr\.?|franken)?", re.I)
+_YEARS = re.compile(r"(\d+(?:[.,]\d+)?)\s*(years?|jahren?|j\b|months?|monaten?)", re.I)
+_YEAR = re.compile(r"\b(20[2-6]\d)\b")
+_AGE = re.compile(r"\b(?:at|mit)\s*(\d{2})\b", re.I)
+
+
+def _parse_rules(text: str, as_of: date) -> dict:
+    low = text.lower()
+    typ = "retirement" if re.search(r"retir|pension|rente|frühpens", low) else \
+        "home" if re.search(r"\b(house|home|flat|apartment|wohnung|haus|eigenheim)\b", low) else "target"
+    label = re.sub(r"^(i (want|would like|'d like|wish) to|i want|ich (möchte|will|würde gerne)|wir (möchten|wollen))\s+", "",
+                   text.strip().rstrip(".!"), flags=re.I)
+    d: dict[str, Any] = {"type": typ, "label": (label[:1].upper() + label[1:])[:40]}
+    if typ == "retirement":
+        m = _AGE.search(low)
+        d["retirement_age"] = int(m.group(1)) if m else 60
+        return d
+    if m := _YEARS.search(low):
+        n = float(m.group(1).replace(",", "."))
+        d["years"] = n / 12 if m.group(2).lower().startswith(("month", "monat")) else n
+    elif m := _YEAR.search(low):
+        d["years"] = max(1, int(m.group(1)) - as_of.year)
+    rest = _YEARS.sub(" ", _YEAR.sub(" ", low))          # numbers left over are amounts
+    for m in _AMOUNT.finditer(rest):
+        raw = m.group(1).replace("'", "").replace("’", "").replace(",", "")
+        try:
+            v = float(raw)
+        except ValueError:
+            continue
+        mult = {"k": 1e3, "tausend": 1e3, "thousand": 1e3, "mio": 1e6, "million": 1e6}.get((m.group(2) or "").lower(), 1)
+        if v * mult >= 100:
+            d["amount"] = v * mult
+            break
+    return d
+
+
+def draft(svc: "PlanningService", client_id: str, text: str, lang: str = "en", question: str | None = None,
+          answer: str | None = None) -> dict[str, Any]:
+    """{"status": "question", "question": ...} or {"status": "goal", "goal": GoalSpec} (added as a suggestion)."""
+    st = svc.state(client_id)
+    as_of, canton = st.profile.as_of, st.ds.client.canton
+    llm = get_llm(svc.cfg)
+    d: dict | None = None
+    if llm is not None:
+        system = DRAFT_SYSTEM.format(today=as_of.isoformat(), language="German" if lang == "de" else "English",
+                                     types=json.dumps(GOAL_TYPES),
+                                     question_rule="you already asked one, so return a goal now." if answer is not None
+                                     else "at most one question.")
+        prompt = json.dumps({"client_sentence": text, "your_question": question, "client_answer": answer,
+                             "client_situation": situation(svc, client_id)}, ensure_ascii=False)
+        try:
+            out = _json(llm.complete(system, prompt, 1200))
+            if out.get("question") and answer is None:
+                return {"status": "question", "question": str(out["question"])[:200]}
+            d = out.get("goal")
+        except Exception as exc:
+            log.warning("goal draft failed: %s", exc)
+    if d is None:                                    # rules: parse what we can, ask once for a missing amount
+        d = _parse_rules(text + (" " + answer if answer else ""), as_of)
+        d["label"] = _parse_rules(text, as_of)["label"]
+        if d["type"] != "retirement" and "amount" not in d:
+            if answer is None:
+                return {"status": "question", "question": "How much will it cost, roughly (CHF)?" if lang != "de"
+                        else "Wie viel wird es ungefähr kosten (CHF)?"}
+            return {"status": "error", "message": "Sorry, I couldn't read an amount. Try e.g. 'a car for CHF 30'000 in 2 years'."}
+        d["reason"] = "Read from your sentence" if lang != "de" else "Aus Ihrem Satz gelesen"
+    goal = to_goal(d, as_of, canton, {g.id for g in st.goals}, "user")
+    if goal is None:
+        return {"status": "error", "message": "Sorry, I couldn't turn that into a goal."}
+    st.goals.append(goal)
+    st.version += 1
+    return {"status": "goal", "goal": goal}
+
