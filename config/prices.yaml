@@ -1,0 +1,18 @@
+# Mobility prices for the car specialist. GA/Halbtax checked 2026-09-17: prices from the 13 Dec 2026 timetable change
+# (srf.ch 'ÖV-Preise 2026', watson.ch, 20min.ch); today GA 3995 / Halbtax 190. Car sharing still (verify) on mobility.ch.
+public_transport:
+  ga_2nd_class_annual: 4095        # adult, from Dec 2026 (checked)
+  halbtax_annual: 195              # adult new customers, from Dec 2026 (checked)
+  full_fare_chf_per_km: 0.32       # average 2nd class point-to-point (estimate)
+  half_fare_factor: 0.5
+car:
+  fuel_price_per_litre: 1.80       # (verify)
+  consumption_l_per_100km: 7.0
+  depreciation_per_year: 0.12
+  private_sale_haircut: 0.10
+  running_cost_categories: [transport_car, car_financing]
+car_sharing:                       # Mobility-style tariffs (verify)
+  subscription_annual: 0
+  hourly_rate: 3.30
+  km_rate: 0.55
+  km_per_hour_of_booking: 12       # converts km to booked hours

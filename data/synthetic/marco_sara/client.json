@@ -1,0 +1,71 @@
+{
+  "as_of": "2026-08-31",
+  "client": {
+    "id": "marco_sara",
+    "name": "Marco & Sara Keller",
+    "birth_year": 1990,
+    "canton": "AG",
+    "gross_income_annual": 158000,
+    "household": {
+      "adults": 2,
+      "partner_birth_year": 1992,
+      "children_birth_years": [
+        2023
+      ]
+    },
+    "pension": {
+      "pillar2_balance": 185000,
+      "pillar2_insured_salary": 105000,
+      "pillar3a_balance": 38000
+    },
+    "health": {
+      "deductible": 1500,
+      "premium_monthly": 855,
+      "insurer": "CSS",
+      "model": "family_doctor"
+    },
+    "goals": [
+      {
+        "id": "home",
+        "type": "home",
+        "label": "House near Baden",
+        "target_date": "2030-06-01",
+        "params": {
+          "price": 820000,
+          "canton": "AG",
+          "use_pillar2": false
+        }
+      },
+      {
+        "id": "retire",
+        "type": "retirement",
+        "label": "Marco's retirement at 65",
+        "target_date": "2055-01-01",
+        "params": {
+          "retirement_age": 65
+        }
+      }
+    ]
+  },
+  "accounts": [
+    {
+      "id": "CH5800761016013456789",
+      "iban": "CH5800761016013456789",
+      "client_id": "marco_sara",
+      "type": "private",
+      "name": "Gemeinschaftskonto",
+      "currency": "CHF",
+      "balance": 14200.0
+    },
+    {
+      "id": "CH3200761016019988776",
+      "iban": "CH3200761016019988776",
+      "client_id": "marco_sara",
+      "type": "savings",
+      "name": "Sparkonto Haus",
+      "currency": "CHF",
+      "balance": 62000.0
+    }
+  ],
+  "positions": []
+}

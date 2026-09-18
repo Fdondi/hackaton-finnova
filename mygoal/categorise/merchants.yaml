@@ -1,0 +1,75 @@
+# Merchant dictionary: the longest key found in the normalised merchant name / booking text wins.
+# `tags` let the what-if agent find spending by theme ("warhammer" -> Games Workshop).
+merchants:
+  migros: {category: groceries}
+  coop: {category: groceries}
+  coop pronto: {category: groceries}
+  coop pronto tankstelle: {category: transport_car, tags: [car, fuel]}
+  denner: {category: groceries}
+  lidl: {category: groceries}
+  aldi: {category: groceries}
+  volg: {category: groceries}
+  bäckerei: {category: groceries}
+  hiltl: {category: restaurants}
+  tibits: {category: restaurants}
+  holy cow: {category: restaurants}
+  starbucks: {category: restaurants}
+  restaurant: {category: restaurants}
+  kafi: {category: restaurants}
+  zeughauskeller: {category: restaurants}
+  sushi: {category: restaurants}
+  mcdonald: {category: restaurants}
+  shell: {category: transport_car, tags: [car, fuel]}
+  bp tankstelle: {category: transport_car, tags: [car, fuel]}
+  sbb: {category: transport_public}
+  zvv: {category: transport_public}
+  bls: {category: transport_public}
+  mobility: {category: transport_public, tags: [car_sharing]}
+  zalando: {category: shopping}
+  galaxus: {category: shopping}
+  digitec: {category: shopping}
+  h&m: {category: shopping}
+  manor: {category: shopping}
+  ikea: {category: shopping, tags: [furniture]}
+  decathlon: {category: shopping, tags: [sport]}
+  coiffeur: {category: shopping, tags: [personal_care]}
+  kino: {category: leisure_hobby, tags: [cinema]}
+  ticketcorner: {category: leisure_hobby, tags: [events]}
+  orell füssli: {category: leisure_hobby, tags: [books]}
+  hallenbad: {category: leisure_hobby, tags: [sport]}
+  update fitness: {category: subscriptions, tags: [gym, sport]}
+  netflix: {category: subscriptions, tags: [streaming, tv]}
+  spotify: {category: subscriptions, tags: [streaming, music]}
+  disney: {category: subscriptions, tags: [streaming, tv]}
+  sunrise: {category: utilities, tags: [telecom]}
+  swisscom: {category: utilities, tags: [telecom]}
+  salt mobile: {category: utilities, tags: [telecom]}
+  ewz: {category: utilities, tags: [electricity]}
+  amavita: {category: health_costs, tags: [pharmacy]}
+  games workshop: {category: leisure_hobby, tags: [warhammer, miniatures, tabletop, hobby]}
+  fantasywelt: {category: leisure_hobby, tags: [warhammer, miniatures, tabletop, hobby]}
+  bootsservice: {category: leisure_hobby, tags: [boat]}
+  yachtshop: {category: leisure_hobby, tags: [boat]}
+  swiss international air: {category: travel, tags: [flight]}
+  booking.com: {category: travel, tags: [hotel]}
+  airbnb: {category: travel, tags: [accommodation]}
+  swissquote: {category: investments}
+  viac: {category: savings_3a}
+  frankly: {category: savings_3a}
+  hofladen: {category: income_other, tags: [cheese, side_business]}
+  marktkasse: {category: income_other, tags: [cheese, side_business]}
+  käse import: {category: leisure_hobby, tags: [cheese, side_business]}
+  marktbewilligung: {category: fees, tags: [cheese, side_business]}
+  bootsbenzin: {category: leisure_hobby, tags: [boat]}
+  bootsversicherung: {category: leisure_hobby, tags: [boat]}
+  kita: {category: childcare}
+  kinderzulage: {category: income_other, tags: [child_allowance]}
+  unterhalt: {category: family_support, tags: [alimony]}
+  globus: {category: shopping}
+  jelmoli: {category: shopping}
+  babywalz: {category: shopping, tags: [kids]}
+  garage: {category: transport_car, tags: [car, service]}
+  badi: {category: leisure_hobby, tags: [swimming]}
+  zoo: {category: leisure_hobby, tags: [family_outing]}
+  ewl: {category: utilities, tags: [electricity]}
+  energie wasser: {category: utilities, tags: [electricity]}

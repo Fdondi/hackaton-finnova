@@ -1,0 +1,75 @@
+{
+  "as_of": "2026-08-31",
+  "client": {
+    "id": "lena",
+    "name": "Lena Brunner",
+    "birth_year": 1995,
+    "canton": "ZH",
+    "gross_income_annual": 105000,
+    "household": {
+      "adults": 1
+    },
+    "pension": {
+      "pillar2_balance": 68000,
+      "pillar2_insured_salary": 78540
+    },
+    "health": {
+      "deductible": 300,
+      "premium_monthly": 432.4,
+      "insurer": "Helsana",
+      "model": "telmed"
+    },
+    "goals": [
+      {
+        "id": "home",
+        "type": "home",
+        "label": "Apartment near Winterthur",
+        "target_date": "2031-06-01",
+        "params": {
+          "price": 540000,
+          "canton": "ZH",
+          "use_pillar2": false
+        }
+      },
+      {
+        "id": "world_trip",
+        "type": "target",
+        "label": "Three months travelling",
+        "target_date": "2028-04-01",
+        "params": {
+          "amount": 18000
+        }
+      },
+      {
+        "id": "retire",
+        "type": "retirement",
+        "label": "Retirement at 65",
+        "target_date": "2060-01-01",
+        "params": {
+          "retirement_age": 65
+        }
+      }
+    ]
+  },
+  "accounts": [
+    {
+      "id": "CH4400700110001234567",
+      "iban": "CH4400700110001234567",
+      "client_id": "lena",
+      "type": "private",
+      "name": "Privatkonto",
+      "currency": "CHF",
+      "balance": 16904.77
+    },
+    {
+      "id": "CH7100700110009876543",
+      "iban": "CH7100700110009876543",
+      "client_id": "lena",
+      "type": "savings",
+      "name": "Sparkonto",
+      "currency": "CHF",
+      "balance": 33400.0
+    }
+  ],
+  "positions": []
+}

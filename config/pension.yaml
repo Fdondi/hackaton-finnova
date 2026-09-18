@@ -1,0 +1,29 @@
+# Swiss pension system parameters. Checked 2026-09-17 (3a, AHV min/max, BVG interest/coordination/threshold):
+# ubs.com/ch/de/services/pension/pillar-3/maximal-contribution.html, smolio.ch (Vorsorgekennzahlen 2026), pfeffersack.ch.
+# Still (verify): conversion/early-retirement reductions (AHV21 transition rules).
+pillar3a:
+  max_with_pension_fund: 7258        # CHF/year, 2026 (checked)
+  max_without_pension_fund: 36288
+ahv:
+  min_monthly: 1260                  # 2026 (checked)
+  max_monthly: 2520
+  income_for_max: 90720              # average annual income for the full pension (checked)
+  thirteenth_pension_from: 2026-12-01
+  reference_age: 65
+  earliest_age: 63
+  early_reduction_per_year: 0.068    # simplified; AHV21 has transitional rates (verify)
+bvg:
+  conversion_rate: 0.058             # typical envelope rate; legal minimum on mandatory part is 6.8% (verify)
+  early_conversion_reduction_per_year: 0.002
+  earliest_age: 58
+  min_interest: 0.0125               # 2026 (checked)
+  coordination_deduction: 26460      # 2026 (checked)
+  entry_threshold: 22680
+  max_insured_salary: 90720
+  age_credits: {25: 0.07, 35: 0.10, 45: 0.15, 55: 0.18}   # share of coordinated salary, employee+employer
+retirement:
+  life_expectancy_age: 90
+  real_return_in_retirement: 0.01
+  default_spending_share: 0.80       # retirement spending as a share of today's spending
+income:
+  net_to_gross: {"0": 0.88, "35": 0.87, "45": 0.86, "55": 0.85}   # by age band; social contributions (estimate)

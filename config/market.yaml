@@ -1,0 +1,31 @@
+# Capital-market and macro assumptions. Shown in the UI with source `market_default`.
+# All amounts are nominal CHF; the engine keeps lever amounts in today's CHF and indexes them.
+# (verify) = typed from memory, not yet checked against an official source.
+inflation:
+  mean: 0.010        # long-run Swiss CPI, SNB aims for 0-2% (verify)
+  sd: 0.008
+cash_rate: 0.003     # savings account interest; SNB policy rate at 0% since mid-2025 (verify)
+overdraft_rate: 0.08
+p3a_account_rate: 0.004   # 3a account interest (verify)
+real_wage_growth: 0.005
+
+portfolios:               # expected nominal return / annual volatility
+  account:      {expected_return: 0.003, volatility: 0.0}
+  conservative: {expected_return: 0.030, volatility: 0.06}
+  balanced:     {expected_return: 0.045, volatility: 0.10}
+  growth:       {expected_return: 0.060, volatility: 0.15}
+default_portfolio: balanced
+p3a_default_portfolio: balanced
+
+house_price_growth: {mean: 0.020, sd: 0.030}
+
+job_loss:
+  annual_prob: 0.025
+  duration_median_months: 6
+  duration_sigma: 0.7
+  replacement_rate: 0.75   # unemployment insurance pays 70-80% of insured salary (verify)
+
+expense_noise_sd: 0.10     # monthly noise on variable spending
+behavioural_haircut:       # behavioural savings fade: effect * (floor + (1-floor) * exp(-t/tau))
+  floor: 0.5
+  tau_months: 12

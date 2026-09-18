@@ -1,0 +1,78 @@
+# Marco (36) & Sara (34), Baden AG. One child (2023), a second planned. Two owned cars, Sara works 60%.
+# Goal: a house by 2029. Levers it should surface: the family bundle (second child), pillar 2 withdrawal
+# hurting retirement (cross-goal), one car fewer, childcare, 3a already used.
+id: marco_sara
+end_date: 2026-08-31
+months: 36
+
+client:
+  id: marco_sara
+  name: Marco & Sara Keller
+  birth_year: 1990
+  canton: AG
+  gross_income_annual: 158000
+  household: {adults: 2, partner_birth_year: 1992, children_birth_years: [2023]}
+  pension: {pillar2_balance: 185000, pillar2_insured_salary: 105000, pillar3a_balance: 38000}
+  health: {deductible: 1500, premium_monthly: 855, insurer: CSS, model: family_doctor}
+
+accounts:
+  - {id: CH5800761016013456789, type: private, name: Gemeinschaftskonto, closing_balance: 14200}
+  - {id: CH3200761016019988776, type: savings, name: Sparkonto Haus, closing_balance: 62000, interest_rate: 0.004}
+
+goals:
+  - id: home
+    type: home
+    label: House near Baden
+    target_date: 2030-06-01
+    params: {price: 820000, canton: AG, use_pillar2: false}
+  - id: retire
+    type: retirement
+    label: Marco's retirement at 65
+    target_date: 2055-01-01
+    params: {retirement_age: 65}
+
+income:
+  - {counterparty: ABB Schweiz AG, iban: CH9300762011623852111, text: "Gutschrift Lohn {month_name} {year}", net_monthly: 7450, raise_pct: 0.015, thirteenth_month: 11, day: 25}
+  - {counterparty: Kantonsspital Baden AG, iban: CH9300762011623852222, text: "Lohnzahlung {month}/{year} S. Keller", net_monthly: 3300, raise_pct: 0.01, day: 26}
+
+recurring:
+  - {counterparty: Familienausgleichskasse Aargau, text: "Gutschrift Kinderzulage", amount: 200, sign: 1, day: 10, code: PMNT-RCDT-DMCT, start: 2023-09-01}
+  - {counterparty: Wincasa AG, text: "Dauerauftrag Miete 4.5 Zi Mellingerstrasse", amount: 2450}
+  - {counterparty: Wincasa AG, text: "Dauerauftrag Parkplatz Tiefgarage", amount: 120}
+  - {counterparty: CSS Versicherung AG, text: "LSV Prämie Grundversicherung Familie", amount: 855, day: 5, code: PMNT-IDDT-ESDD}
+  - {counterparty: Kita Sonnenschein Baden, text: "Zahlung Rechnung Kita Betreuung {month}/{year}", amount: 1150, day: 12, code: PMNT-ICDT-DMCT}
+  - {counterparty: Steueramt Baden, text: "Dauerauftrag Steuern Rate", amount: 1300, day: 28}
+  - {counterparty: VIAC Vorsorgestiftung 3a, text: "Dauerauftrag Säule 3a Einzahlung", amount: 605, day: 27}
+  - {counterparty: Mobiliar Versicherungen, text: "Zahlung Motorfahrzeugversicherung Skoda", amount: 1150, every: yearly, month: 3, day: 10, code: PMNT-ICDT-DMCT}
+  - {counterparty: Mobiliar Versicherungen, text: "Zahlung Motorfahrzeugversicherung Clio", amount: 780, every: yearly, month: 9, day: 10, code: PMNT-ICDT-DMCT}
+  - {counterparty: Strassenverkehrsamt Aargau, text: "Zahlung Verkehrssteuer Skoda", amount: 380, every: yearly, month: 2, day: 18, code: PMNT-ICDT-DMCT}
+  - {counterparty: Strassenverkehrsamt Aargau, text: "Zahlung Verkehrssteuer Clio", amount: 240, every: yearly, month: 2, day: 19, code: PMNT-ICDT-DMCT}
+  - {counterparty: Garage Baden AG, text: "Zahlung Rechnung Service", amount: 720, jitter: 0.3, every: semiannual, months: [4, 10], day: 15, code: PMNT-ICDT-DMCT}
+  - {counterparty: Regionalwerke AG Baden, text: "LSV Stromrechnung", amount: 180, jitter: 0.15, every: quarterly, day: 20, code: PMNT-IDDT-ESDD}
+  - {counterparty: Swisscom (Schweiz) AG, text: "LSV Swisscom blue Abo", amount: 129, day: 8, code: PMNT-IDDT-ESDD}
+  - {counterparty: Serafe AG, text: "Zahlung Radio- und Fernsehabgabe {year}", amount: 335, every: yearly, month: 4, day: 12, code: PMNT-ICDT-DMCT}
+  - {counterparty: Die Mobiliar, text: "Zahlung Prämie Hausrat Privathaftpflicht", amount: 420, every: yearly, month: 1, day: 20, code: PMNT-ICDT-DMCT}
+  - {counterparty: Netflix International B.V., text: "Einkauf NETFLIX.COM Karte xxxx 7310", amount: 20.90, day: 12, code: PMNT-CCRD-POSD, mcc: 4899}
+  - {counterparty: "", text: "Preis für Kontoführung", amount: 5.00, day: 28, code: ACMT-MDOP-CHRG}
+
+variable:
+  - {merchants: [Migros, Coop, Denner, Lidl, Aldi Suisse], per_month: 16, median: 55, sigma: 0.6, mcc: 5411, cities: [Baden, Wettingen, Dättwil]}
+  - {merchants: [Migrol Tankstelle, Shell, Coop Pronto Tankstelle, Avia Tankstelle], per_month: 5, median: 75, sigma: 0.25, mcc: 5541, cities: [Baden]}
+  - {merchants: [Restaurant Roter Turm, Pizzeria Da Mario, McDonald's], per_month: 4, median: 48, sigma: 0.5, mcc: 5812, cities: [Baden]}
+  - {merchants: [Manor, H&M, Babywalz, Galaxus, IKEA, Decathlon], per_month: 3.5, median: 75, sigma: 0.7, mcc: 5651, cities: [Baden, Spreitenbach]}
+  - {merchants: [Amavita Apotheke, Kinderarztpraxis Baden], per_month: 1, median: 45, sigma: 0.6, mcc: 5912, cities: [Baden]}
+  - {merchants: [SBB Mobile], per_month: 2, median: 22, sigma: 0.5, mcc: 4111}
+  - {merchants: [Badi Baden, Kino Trafo, Zoo Zürich], per_month: 1.5, median: 40, sigma: 0.5}
+
+twint_p2p: {per_month: 4, median: 35, sigma: 0.5, incoming_share: 0.3, names: [Nonna Keller, Laura Frei, Tim Meier]}
+cash: {per_month: 1.5, median: 120, sigma: 0.4, atms: [Bancomat Raiffeisen Baden, Postomat Wettingen]}
+credit_card:
+  issuer: Cornèrcard
+  day: 22
+  items:
+    - {schedule: {7: 2600, 10: 700, 12: 500}, jitter: 0.25}
+    - {per_month: 2, median: 40, sigma: 0.6}
+health_bills: {per_year: 3, providers: [Hausarztpraxis Baden, Zahnarztpraxis Dr. Huber], median: 220, sigma: 0.6, deductible: 1500, insurer: CSS Versicherung AG, delay_days: 45}
+internal_transfers:
+  - {to: savings, amount: 1500, day: 26, text: "Übertrag Sparkonto Haus"}
+messiness: {duplicate_looking: 2, exact_duplicate_rows: 1, refunds: [{date: 2026-01-15, merchant: Galaxus, amount: 189.00}]}

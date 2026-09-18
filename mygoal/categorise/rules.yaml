@@ -1,0 +1,37 @@
+# Ordered rules; first match wins. All conditions in `when` must match.
+# Fields: text (booking text + counterparty), counterparty, merchant, bank_tx_code, mcc, sign (+/-).
+# Values are case-insensitive regular expressions (re.search).
+rules:
+  - {when: {bank_tx_code: "-SALA$"}, category: income_salary}
+  - {when: {text: "lohn|gehalt|salär|salaire", sign: "+"}, category: income_salary}
+  - {when: {text: "hafen|bootsplatz|mooring|bootswerft|marina|bootsservice|bootsversicherung|bootsbenzin|winterlager boot"}, category: leisure_hobby, tags: [boat]}
+  - {when: {text: "käseverkauf|käse import|yak-käse|marktbewilligung"}, category: income_other, tags: [cheese, side_business]}
+  - {when: {text: "kinderzulage|familienzulage|familienausgleichskasse"}, category: income_other, tags: [child_allowance]}
+  - {when: {text: "unterhalt|alimente|unterhaltsbeitrag"}, category: family_support, tags: [alimony]}
+  - {when: {text: "^twint \\*(sende|senden|gesendet) an"}, category: transfers_p2p}
+  - {when: {text: "^twint \\*(empfangen|erhalten) von"}, category: transfers_p2p}
+  - {when: {bank_tx_code: "-CWDL$"}, category: cash}
+  - {when: {text: "bargeldbezug|bancomat|postomat|geldautomat"}, category: cash}
+  - {when: {text: "(viseca|cornèrcard|cornercard|swisscard|cembra|kreditkarte|visa|mastercard).*(rechnung|abrechnung)"}, category: card_lump}
+  - {when: {text: "einstellplatz|parkplatz|garagenplatz|parkhaus|parkingpay|parkuhr"}, category: transport_car, tags: [car, parking]}
+  - {when: {text: "leasing"}, category: car_financing, tags: [car, leasing]}
+  - {when: {text: "verkehrsabgabe|strassenverkehrsamt|motorfahrzeugsteuer"}, category: transport_car, tags: [car, vehicle_tax]}
+  - {when: {text: "motorfahrzeugversicherung|autoversicherung|mfz-versicherung"}, category: transport_car, tags: [car, car_insurance]}
+  - {when: {text: "autobahnvignette|vignette"}, category: transport_car, tags: [car]}
+  - {when: {text: "tankstelle|migrol|socar|avia|tamoil"}, category: transport_car, tags: [car, fuel]}
+  - {when: {text: "garage.*(service|rechnung|reifen)|reifenwechsel|autoservice"}, category: transport_car, tags: [car, service]}
+  - {when: {text: "miete|mietzins|nebenkosten wohnung"}, category: housing, tags: [rent]}
+  - {when: {text: "hypothek"}, category: housing, tags: [mortgage]}
+  - {when: {text: "prämie.*(grundversicherung|kvg|krankenversicherung)|krankenkasse"}, category: health_premium, tags: [kvg]}
+  - {when: {text: "leistungsabrechnung|rückerstattung.*(arzt|leistung)", sign: "+"}, category: health_costs, tags: [reimbursement]}
+  - {when: {text: "dr\\. ?med|arztpraxis|hausarzt|physiotherapie|spital|zahnarzt|apotheke|klinik"}, category: health_costs}
+  - {when: {text: "säule 3a|3a[- ]?(konto|vorsorge|einzahlung)|vorsorgekonto|vorsorgestiftung"}, category: savings_3a}
+  - {when: {text: "sparplan|fondssparplan|wertschriften(kauf|depot)|vermögensverwaltung|anlageplan"}, category: investments}
+  - {when: {text: "steuer"}, category: taxes}
+  - {when: {text: "serafe|radio- und fernsehabgabe|stromrechnung|elektrizitätswerk|wasserversorgung|lsv energie"}, category: utilities}
+  - {when: {text: "hausrat|privathaftpflicht|rechtsschutz|lebensversicherung"}, category: insurance_other}
+  - {when: {text: "kontoführung|gebühr|spesen|preis für"}, category: fees}
+  - {when: {text: "zinsgutschrift|dividende"}, category: income_other}
+  - {when: {text: "retoure|rückvergütung", sign: "+"}, category: shopping, tags: [refund]}
+  - {when: {text: "kita|krippe|kindertagesstätte|hort|tagesmutter|tagesfamilie"}, category: childcare}
+

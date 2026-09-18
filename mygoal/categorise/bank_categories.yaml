@@ -1,0 +1,5 @@
+# If the real data ships its own categories, map them to our taxonomy here (taxonomy.yaml).
+# Bookings whose bank category maps to a known category skip our rules.
+map: {}
+#  "Lebensmittel": groceries
+#  "Wohnen / Miete": housing

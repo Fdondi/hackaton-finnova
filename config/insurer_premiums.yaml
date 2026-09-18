@@ -1,0 +1,12 @@
+# MOCK premium table behind InsurerQuoteService (mygoal/specialists/insurer_quote.py).
+# Replace with priminfo.admin.ch data or a real insurer/comparison API. Monthly CHF, adult, deductible 300.
+base_premium_300:
+  default: 440
+  ZH: 470
+  AG: 415
+  LU: 400
+  BE: 455
+age_factor: [{max_age: 18, factor: 0.25}, {max_age: 25, factor: 0.72}, {max_age: 200, factor: 1.0}]
+model_factor: {standard: 1.0, family_doctor: 0.88, hmo: 0.84, telmed: 0.86}
+without_accident_cover_factor: 0.93
+deductible_discount_share_of_max: 0.95   # insurers typically pass on close to the legal maximum

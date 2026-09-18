@@ -1,0 +1,76 @@
+# Urs, 52, Lucerne. High income, a boat, a Warhammer army, a small Tibetan-cheese side business.
+# Goal: retire at 60. Surfaces the oddball what-if agent (boat, Warhammer, cheese) and the early-retirement gap.
+id: urs
+end_date: 2026-08-31
+months: 36
+
+client:
+  id: urs
+  name: Urs Zimmermann
+  birth_year: 1974
+  canton: LU
+  gross_income_annual: 165000
+  household: {adults: 1}
+  pension: {pillar2_balance: 520000, pillar2_insured_salary: 138000, pillar3a_balance: 96000}
+  health: {deductible: 300, premium_monthly: 518, insurer: Sanitas, model: standard}
+
+accounts:
+  - {id: CH1200778010203040506, type: private, name: Privatkonto, closing_balance: 22000}
+  - {id: CH3400778010203040599, type: savings, name: Sparkonto, closing_balance: 48000, interest_rate: 0.003}
+  - {id: CH5600778010203040511, type: securities, name: Wertschriftendepot, closing_balance: 185000}
+
+goals:
+  - id: retire60
+    type: retirement
+    label: Early retirement at 60
+    target_date: 2034-06-01
+    params: {retirement_age: 60}
+  - id: studies
+    type: target
+    label: Support daughter's studies
+    target_date: 2028-09-01
+    params: {amount: 40000}
+
+income:
+  - {counterparty: Schindler Aufzüge AG, iban: CH9300762011623852333, text: "Gutschrift Salär {month_name} {year}", net_monthly: 10750, raise_pct: 0.01, thirteenth_month: 12, day: 25}
+
+recurring:
+  - {counterparty: Allgemeine Baugenossenschaft Luzern, text: "Dauerauftrag Miete Haldenstrasse", amount: 2650}
+  - {counterparty: Sanitas Grundversicherungen AG, text: "LSV Prämie Grundversicherung", amount: 518, day: 5, code: PMNT-IDDT-ESDD}
+  - {counterparty: Steueramt der Stadt Luzern, text: "Dauerauftrag Steuern Rate", amount: 2300, day: 28}
+  - {counterparty: Frankly Vorsorgestiftung 3a, text: "Dauerauftrag Säule 3a", amount: 605, day: 27}
+  - {counterparty: Hafen Luzern AG, text: "Zahlung Rechnung Bootsplatz Saison {year}", amount: 2850, every: yearly, month: 4, day: 8, code: PMNT-ICDT-DMCT}
+  - {counterparty: Allianz Suisse, text: "Zahlung Prämie Bootsversicherung", amount: 780, every: yearly, month: 5, day: 12, code: PMNT-ICDT-DMCT}
+  - {counterparty: Bootswerft Kehrsiten AG, text: "Zahlung Rechnung Winterlager Boot", amount: 1900, every: yearly, month: 10, day: 20, code: PMNT-ICDT-DMCT}
+  - {counterparty: Bootsservice Vierwaldstättersee GmbH, text: "Zahlung Rechnung Bootsservice", amount: 650, jitter: 0.3, every: yearly, month: 5, day: 25, code: PMNT-ICDT-DMCT}
+  - {counterparty: Stadt Luzern, text: "Zahlung Marktbewilligung Wochenmarkt", amount: 480, every: yearly, month: 3, day: 15, code: PMNT-ICDT-DMCT}
+  - {counterparty: AXA Versicherungen AG, text: "Zahlung Motorfahrzeugversicherung", amount: 1650, every: yearly, month: 6, day: 10, code: PMNT-ICDT-DMCT}
+  - {counterparty: Strassenverkehrsamt Luzern, text: "Zahlung Verkehrssteuer", amount: 520, every: yearly, month: 1, day: 20, code: PMNT-ICDT-DMCT}
+  - {counterparty: ewl energie wasser luzern, text: "LSV Energie", amount: 140, jitter: 0.15, every: quarterly, day: 20, code: PMNT-IDDT-ESDD}
+  - {counterparty: Salt Mobile SA, text: "LSV Salt Abo", amount: 65, day: 8, code: PMNT-IDDT-ESDD}
+  - {counterparty: Serafe AG, text: "Zahlung Radio- und Fernsehabgabe {year}", amount: 335, every: yearly, month: 4, day: 12, code: PMNT-ICDT-DMCT}
+  - {counterparty: Himalaya Käse Import GmbH, text: "Zahlung Rechnung Yak-Käse Lieferung", amount: 420, jitter: 0.35, day: 14, code: PMNT-ICDT-DMCT}
+  - {counterparty: Swisscom (Schweiz) AG, text: "LSV blue TV", amount: 49, day: 9, code: PMNT-IDDT-ESDD}
+  - {counterparty: Zimmermann Laura, text: "Dauerauftrag Unterhalt Laura", amount: 900, day: 1}
+
+variable:
+  - {merchants: [Migros, Coop, Globus Delicatessa, Manor Food], per_month: 10, median: 62, sigma: 0.6, mcc: 5411, cities: [Luzern]}
+  - {merchants: [Hotel Schweizerhof Restaurant, Wirtshaus Galliker, Old Swiss House], per_month: 7, median: 70, sigma: 0.5, mcc: 5812, cities: [Luzern]}
+  - {merchants: [Shell, Avia Tankstelle, BP Tankstelle], per_month: 3, median: 110, sigma: 0.2, mcc: 5541, cities: [Luzern]}
+  - {merchants: [Tankstelle Hafen Luzern], per_month: 2, median: 90, sigma: 0.3, active_months: [5, 6, 7, 8, 9], text: "Einkauf {merchant} Bootsbenzin Karte xxxx 2210"}
+  - {merchants: [Games Workshop Luzern, Fantasywelt Luzern], per_month: 2.2, median: 85, sigma: 0.6, mcc: 5945, cities: [Luzern]}
+  - {merchants: [Globus, Jelmoli, Galaxus], per_month: 2.5, median: 120, sigma: 0.7, mcc: 5651, cities: [Luzern]}
+  - {merchants: [Hofladen Sörenberg GmbH, Marktkasse Wochenmarkt Luzern], per_month: 5, median: 180, sigma: 0.5, sign: 1, text: "Gutschrift {merchant} Käseverkauf", counterparty_field: true}
+
+twint_p2p: {per_month: 2, median: 60, sigma: 0.5, incoming_share: 0.4, names: [Laura Zimmermann, Beat Wicki]}
+cash: {per_month: 2, median: 200, sigma: 0.4, atms: [Bancomat LUKB Schwanenplatz, Postomat Luzern Bahnhof]}
+credit_card:
+  issuer: Swisscard AECS GmbH
+  day: 18
+  items:
+    - {schedule: {2: 1600, 8: 3200, 11: 900}, jitter: 0.25}
+    - {per_month: 3, median: 70, sigma: 0.6}
+health_bills: {per_year: 4, providers: [Hausarztpraxis Luzern, Physiotherapie Seefeld], median: 260, sigma: 0.6, deductible: 300, insurer: Sanitas Grundversicherungen AG, delay_days: 40}
+internal_transfers:
+  - {to: savings, amount: 1000, day: 26, text: "Übertrag Sparkonto"}
+messiness: {duplicate_looking: 2, exact_duplicate_rows: 1, refunds: []}

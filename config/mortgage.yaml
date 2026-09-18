@@ -1,0 +1,16 @@
+# Swiss mortgage rules of thumb (SBA self-regulation + typical lender practice). (verify)
+equity_min_share: 0.20
+hard_equity_min_share: 0.10            # at least 10% must not come from pillar 2
+pillar3a_counts_as_hard_equity: true   # common lender practice (verify)
+imputed_interest_rate: 0.05            # affordability test ("kalkulatorischer Zins")
+maintenance_rate: 0.01
+second_mortgage_to_ltv: 0.6667         # amortise down to 2/3 of value...
+amortisation_years: 15                 # ...within 15 years or by retirement
+max_cost_to_income: 0.3333
+buying_costs_share:                    # notary, land registry, transfer tax; canton-dependent (verify)
+  default: 0.03
+  ZH: 0.015
+  AG: 0.025
+  LU: 0.025
+actual_mortgage_rate: 0.018            # cash-flow after purchase, 10y fixed (verify)
+pillar2_withdrawal_tax_rate: 0.06      # capital withdrawal tax (estimate)

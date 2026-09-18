@@ -1,0 +1,24 @@
+# Routing and search vocabulary (EN/DE). Extend freely.
+specialists:            # phrases that map a what-if to an existing specialist lever
+  give_up_car: ["car", "auto", "leasing", "vehicle", "fahrzeug"]
+  kvg_deductible: ["deductible", "franchise", "krankenkasse", "health insurance", "krankenversicherung"]
+  have_child: ["child", "baby", "kid", "kind", "nachwuchs", "familie gründen"]
+  max_3a: ["3a", "pillar 3", "säule 3"]
+  invest_idle_cash: ["invest", "etf", "anlegen", "investieren"]
+  use_pillar2: ["pension fund", "pillar 2", "pensionskasse", "säule 2", "bvg"]
+synonyms:               # expand search terms for transactions
+  boat: [boot, bootsplatz, hafen, marina, yacht, segel, bootswerft, boat]
+  warhammer: [warhammer, games workshop, miniatures, tabletop, fantasywelt]
+  cheese: [käse, cheese, hofladen, marktstand, yak]
+  horse: [pferd, reitstall, stall, horse]
+  gym: [fitness, gym]
+  golf: [golf, golfclub]
+intents:                # checked in this order: most specific first
+  side_income: "\\b(side (business|job|income|hustle)|nebenerwerb|nebenjob|scale up|ausbauen|earn|verdien\\w*)\\b"
+  part_time: "(\\bpart[- ]time\\b|\\bteilzeit\\b|reduce my hours|\\b\\d{2} ?%|\\b\\d{2} ?(percent|prozent)\\b)"
+  one_off: "\\b(wedding|inherit\\w*|bonus|renovat\\w*|hochzeit|erb\\w*|windfall|gift|geschenk)\\b"
+  dispose: "\\b(sell|selling|get rid of|give up|dispose|verkauf\\w*|aufgeben|abstossen|loswerden)\\b"
+  stop: "\\b(stop|quit|cancel|kündig\\w*|aufhören|verzicht\\w*|no more|keine)\\b"
+  reduce: "\\b(less|reduce|cut|weniger|reduzier\\w*)\\b"
+  acquire: "\\b(buy|purchase|get a|kauf\\w*|anschaff\\w*)\\b"
+stopwords: [what, if, i, my, the, a, an, and, to, of, was, wäre, wenn, ich, mein, meine, meinen, den, die, das, ein, eine, collection, sammlung, all, alle, would, happen, could, should, instead]

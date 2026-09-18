@@ -1,0 +1,118 @@
+# Lena, 31, Zurich. Single, CHF 105k gross, leased car, 300 deductible with almost no medical costs,
+# CHF 45-50k idle cash, Netflix/Spotify, a Warhammer hobby. Goal: apartment by mid-2031.
+# Levers the data should surface: idle cash -> invest, deductible, give up the car, 3a. Netflix ranks last.
+id: lena
+end_date: 2026-08-31
+months: 36
+
+client:
+  id: lena
+  name: Lena Brunner
+  birth_year: 1995
+  canton: ZH
+  gross_income_annual: 105000
+  household: {adults: 1}
+  pension: {pillar2_balance: 68000, pillar2_insured_salary: 78540}
+  health: {deductible: 300, premium_monthly: 432.40, insurer: Helsana, model: telmed}
+
+accounts:
+  - {id: CH4400700110001234567, type: private, name: Privatkonto, closing_balance: 11850}
+  - {id: CH7100700110009876543, type: savings, name: Sparkonto, closing_balance: 33400, interest_rate: 0.003}
+
+goals:
+  - id: home
+    type: home
+    label: Apartment near Winterthur
+    target_date: 2031-06-01
+    params: {price: 540000, canton: ZH, use_pillar2: false}
+  - id: world_trip
+    type: target
+    label: Three months travelling
+    target_date: 2028-04-01
+    params: {amount: 18000}
+  - id: retire
+    type: retirement
+    label: Retirement at 65
+    target_date: 2060-01-01
+    params: {retirement_age: 65}
+
+income:
+  - counterparty: Limmat Data Solutions AG
+    iban: CH9300762011623852957
+    text: "Gutschrift Lohn {month_name} {year}"
+    net_monthly: 7030
+    raise_pct: 0.015
+    raise_month: 1
+    thirteenth_month: 11
+    day: 25
+
+recurring:
+  - {counterparty: Immobilien Verwaltung Seefeld AG, text: "Dauerauftrag Miete Wohnung Josefstrasse 12", amount: 1850, end: 2024-09-30}
+  - {counterparty: Immobilien Verwaltung Seefeld AG, text: "Dauerauftrag Miete Wohnung Josefstrasse 12", amount: 1890, start: 2024-10-01}
+  - {counterparty: Immobilien Verwaltung Seefeld AG, text: "Dauerauftrag Einstellplatz Nr. 17", amount: 150}
+  - {counterparty: Helsana Versicherungen AG, text: "LSV Prämie Grundversicherung {month}/{year}", amount: 389.00, day: 5, code: PMNT-IDDT-ESDD, end: 2024-12-31}
+  - {counterparty: Helsana Versicherungen AG, text: "LSV Prämie Grundversicherung {month}/{year}", amount: 408.10, day: 5, code: PMNT-IDDT-ESDD, start: 2025-01-01, end: 2025-12-31}
+  - {counterparty: Helsana Versicherungen AG, text: "LSV Prämie Grundversicherung {month}/{year}", amount: 432.40, day: 5, code: PMNT-IDDT-ESDD, start: 2026-01-01}
+  - {counterparty: AMAG Leasing AG, text: "Lastschrift Leasingvertrag 4410-2231 Rate", amount: 459.00, day: 15, code: PMNT-IDDT-ESDD}
+  - {counterparty: AXA Versicherungen AG, text: "Zahlung Motorfahrzeugversicherung Police 7.123.456", amount: 1380, every: yearly, month: 3, day: 10, code: PMNT-ICDT-DMCT}
+  - {counterparty: Strassenverkehrsamt des Kantons Zürich, text: "Zahlung Verkehrsabgaben ZH 123456", amount: 412, every: yearly, month: 2, day: 20, code: PMNT-ICDT-DMCT}
+  - {counterparty: Garage Wiedikon AG, text: "Zahlung Rechnung Service und Reifenwechsel", amount: 650, jitter: 0.3, every: semiannual, months: [4, 10], day: 14, code: PMNT-ICDT-DMCT}
+  - {counterparty: Serafe AG, text: "Zahlung Radio- und Fernsehabgabe {year}", amount: 335, every: yearly, month: 4, day: 12, code: PMNT-ICDT-DMCT}
+  - {counterparty: ewz Elektrizitätswerk der Stadt Zürich, text: "LSV Stromrechnung", amount: 96, jitter: 0.15, every: quarterly, day: 22, code: PMNT-IDDT-ESDD}
+  - {counterparty: Sunrise GmbH, text: "LSV Sunrise Mobile Abo", amount: 49.90, day: 8, code: PMNT-IDDT-ESDD}
+  - {counterparty: Netflix International B.V., text: "Einkauf NETFLIX.COM Karte xxxx 4821", amount: 18.90, day: 12, code: PMNT-CCRD-POSD, mcc: 4899, end: 2025-03-31}
+  - {counterparty: Netflix International B.V., text: "Einkauf NETFLIX.COM Karte xxxx 4821", amount: 20.90, day: 12, code: PMNT-CCRD-POSD, mcc: 4899, start: 2025-04-01}
+  - {counterparty: Spotify AB, text: "Einkauf Spotify P2F4A1 Stockholm Karte xxxx 4821", amount: 13.95, day: 18, code: PMNT-CCRD-POSD, mcc: 5815}
+  - {counterparty: Update Fitness AG, text: "LSV Update Fitness Abo", amount: 89.00, day: 3, code: PMNT-IDDT-ESDD}
+  - {counterparty: Steueramt der Stadt Zürich, text: "Dauerauftrag Steuern Ratenzahlung", amount: 1020, day: 28}
+  - {counterparty: Steueramt der Stadt Zürich, text: "Zahlung Schlussrechnung Staats- und Gemeindesteuern", amount: 640, jitter: 0.5, every: yearly, month: 6, day: 15, code: PMNT-ICDT-DMCT}
+  - {counterparty: Die Mobiliar, text: "Zahlung Prämie Hausrat Privathaftpflicht", amount: 285, every: yearly, month: 1, day: 20, code: PMNT-ICDT-DMCT}
+  - {counterparty: "", text: "Preis für Kontoführung", amount: 3.00, day: 28, code: ACMT-MDOP-CHRG}
+  - {counterparty: Die Post, text: "Einkauf Autobahnvignette Post Zürich", amount: 40, every: yearly, month: 1, day: 9, code: PMNT-CCRD-POSD}
+
+variable:
+  - {merchants: [Migros, Coop, Denner, Lidl, Aldi Suisse], per_month: 10, median: 42, sigma: 0.6, mcc: 5411, cities: [Zürich, Zürich HB, Winterthur]}
+  - {merchants: [Bäckerei Hug, Kafi Dihei, Migros], per_month: 3, median: 11, sigma: 0.4, text: "TWINT *{merchant}", counterparty_field: false}
+  - {merchants: [Restaurant Hiltl, Tibits, Holy Cow Gourmet Burger, Starbucks, Zeughauskeller, Sushi Mania], per_month: 6, median: 38, sigma: 0.5, mcc: 5812}
+  - {merchants: [Migrol Tankstelle, BP Tankstelle, Shell, Coop Pronto Tankstelle, Socar Tankstelle], per_month: 2.4, median: 82, sigma: 0.25, mcc: 5541}
+  - {merchants: [Parkhaus Urania, Parkingpay], per_month: 1.5, median: 12, sigma: 0.5}
+  - {merchants: [SBB Mobile, ZVV Ticketautomat], per_month: 3, median: 9, sigma: 0.6, mcc: 4111}
+  - {merchants: [Zalando, Galaxus, H&M, Manor, IKEA, Decathlon], per_month: 2.0, median: 68, sigma: 0.7, mcc: 5651}
+  - {merchants: [Kino Arena, Ticketcorner, Orell Füssli, Hallenbad City], per_month: 2, median: 35, sigma: 0.5}
+  - {merchants: [Amavita Apotheke, Apotheke Bahnhof], per_month: 0.6, median: 22, sigma: 0.5, mcc: 5912}
+  - {merchants: [Coiffeur Seefeld], per_month: 0.5, median: 75, sigma: 0.2}
+  - {merchants: [Games Workshop Zürich, Fantasywelt Zürich], per_month: 1.1, median: 58, sigma: 0.6, mcc: 5945}   # the Warhammer hobby
+
+twint_p2p: {per_month: 3, median: 30, sigma: 0.5, incoming_share: 0.25, names: [Anna Meier, Luca Bernasconi, Sarah Keller, Jonas Frei]}
+cash: {per_month: 1.2, median: 150, sigma: 0.4, atms: [Bancomat ZKB Zürich HB, Bancomat UBS Stauffacher, Postomat Zürich Wiedikon]}
+
+credit_card:
+  issuer: Viseca Card Services SA
+  day: 20
+  items:   # invisible to the bank: only the monthly lump debit shows up
+    - {schedule: {2: 650, 7: 1900, 10: 450, 12: 600}, jitter: 0.25}   # holidays
+    - {per_month: 2, median: 45, sigma: 0.6}
+    - {per_month: 1, median: 12, sigma: 0.3}
+
+health_bills:
+  per_year: 1.5
+  providers: [Dr. med. S. Keller Hausarztpraxis, Physiotherapie Kreis 4]
+  median: 160
+  sigma: 0.5
+  deductible: 300
+  insurer: Helsana Versicherungen AG
+  delay_days: 40
+
+internal_transfers:
+  - {to: savings, amount: 500, day: 26, text: "Übertrag auf Sparkonto"}
+
+one_offs:
+  - {date: 2024-11-16, amount: -1240, text: "Einkauf IKEA Spreitenbach Karte xxxx 4821", counterparty: IKEA, mcc: 5712}
+
+messiness:
+  duplicate_looking: 3
+  exact_duplicate_rows: 2
+  refunds:
+    - {date: 2025-11-12, merchant: Zalando, amount: 79.90}
+    - {date: 2026-03-04, merchant: Galaxus, amount: 129.00}
+  missing_month: "2026-02"

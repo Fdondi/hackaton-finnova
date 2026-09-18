@@ -1,0 +1,30 @@
+# Flattened camt.053-style export (what scripts/gen_data.py writes).
+# Copy this file for a new export layout and change only what differs.
+format: csv
+delimiter: ";"
+encoding: utf-8
+decimal: "."          # "," for 1.234,50 style
+thousands: null       # "'" for 1'234.50 style (apostrophes are always stripped anyway)
+date_formats: ["%Y-%m-%d", "%d.%m.%Y"]
+
+columns:              # canonical field: raw column | [columns joined with " | "] | {const: value} | null
+  id: NtryRef
+  account_id: AcctIBAN
+  booking_date: BookgDt
+  value_date: ValDt
+  amount: Amt
+  currency: Ccy
+  text: [AddtlNtryInf, RmtInf]
+  counterparty: CdtrDbtrNm
+  counterparty_iban: CdtrDbtrIBAN
+  mcc: MCC
+  bank_tx_code: BkTxCd
+  bank_category: null
+
+sign:                 # signed | indicator | split
+  mode: indicator
+  column: CdtDbtInd
+  credit_values: [CRDT, C, "+"]
+  debit_values: [DBIT, D, "-"]
+  # split mode:   {mode: split, debit_column: Belastung, credit_column: Gutschrift}
+  # signed mode:  {mode: signed, invert: false}

@@ -1,0 +1,32 @@
+# Flat category taxonomy. Downstream code reads these attributes instead of hard-coding category lists.
+# kind: income | spending | saving | transfer
+# opaque: money leaves but we can't see what it bought (shown as "can't see into")
+# discretionary: can plausibly be cut by behaviour alone
+categories:
+  income_salary:     {kind: income,   label: {en: Salary, de: Lohn}}
+  income_other:      {kind: income,   label: {en: Other income, de: Übrige Einnahmen}}
+  housing:           {kind: spending, essential: true, label: {en: Housing, de: Wohnen}}
+  utilities:         {kind: spending, essential: true, label: {en: Utilities & telecom, de: Energie & Telekom}}
+  health_premium:    {kind: spending, essential: true, label: {en: Health insurance, de: Krankenkasse}}
+  health_costs:      {kind: spending, essential: true, label: {en: Health costs, de: Gesundheitskosten}}
+  insurance_other:   {kind: spending, essential: true, label: {en: Other insurance, de: Übrige Versicherungen}}
+  taxes:             {kind: spending, essential: true, label: {en: Taxes, de: Steuern}}
+  groceries:         {kind: spending, essential: true, label: {en: Groceries, de: Lebensmittel}}
+  restaurants:       {kind: spending, discretionary: true, label: {en: Restaurants & cafés, de: Restaurants & Cafés}}
+  transport_public:  {kind: spending, label: {en: Public transport, de: ÖV}}
+  transport_car:     {kind: spending, label: {en: Car running costs, de: Auto Betrieb}}
+  car_financing:     {kind: spending, label: {en: Car leasing & loans, de: Auto Leasing & Kredit}}
+  subscriptions:     {kind: spending, discretionary: true, label: {en: Subscriptions, de: Abos}}
+  leisure_hobby:     {kind: spending, discretionary: true, label: {en: Leisure & hobbies, de: Freizeit & Hobbys}}
+  travel:            {kind: spending, discretionary: true, label: {en: Travel, de: Reisen}}
+  childcare:         {kind: spending, essential: true, label: {en: Childcare, de: Kinderbetreuung}}
+  family_support:    {kind: spending, essential: true, label: {en: Family support & alimony, de: Unterhalt}}
+  shopping:          {kind: spending, discretionary: true, label: {en: Shopping, de: Einkäufe}}
+  fees:              {kind: spending, label: {en: Bank fees, de: Bankgebühren}}
+  transfers_p2p:     {kind: spending, opaque: true, label: {en: TWINT & transfers to people, de: TWINT & Überweisungen an Personen}}
+  cash:              {kind: spending, opaque: true, label: {en: Cash withdrawals, de: Bargeldbezüge}}
+  card_lump:         {kind: spending, opaque: true, label: {en: Credit card bills, de: Kreditkartenrechnungen}}
+  unexplained:       {kind: spending, opaque: true, label: {en: Unexplained, de: Nicht zuordenbar}}
+  savings_3a:        {kind: saving,   saving_bucket: p3a, label: {en: Pillar 3a, de: Säule 3a}}
+  investments:       {kind: saving,   saving_bucket: invested, label: {en: Investments, de: Anlagen}}
+  internal_transfer: {kind: transfer, label: {en: Between own accounts, de: Zwischen eigenen Konten}}

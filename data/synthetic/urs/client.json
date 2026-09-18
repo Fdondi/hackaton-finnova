@@ -1,0 +1,74 @@
+{
+  "as_of": "2026-08-31",
+  "client": {
+    "id": "urs",
+    "name": "Urs Zimmermann",
+    "birth_year": 1974,
+    "canton": "LU",
+    "gross_income_annual": 165000,
+    "household": {
+      "adults": 1
+    },
+    "pension": {
+      "pillar2_balance": 520000,
+      "pillar2_insured_salary": 138000,
+      "pillar3a_balance": 96000
+    },
+    "health": {
+      "deductible": 300,
+      "premium_monthly": 518,
+      "insurer": "Sanitas",
+      "model": "standard"
+    },
+    "goals": [
+      {
+        "id": "retire60",
+        "type": "retirement",
+        "label": "Early retirement at 60",
+        "target_date": "2034-06-01",
+        "params": {
+          "retirement_age": 60
+        }
+      },
+      {
+        "id": "studies",
+        "type": "target",
+        "label": "Support daughter's studies",
+        "target_date": "2028-09-01",
+        "params": {
+          "amount": 40000
+        }
+      }
+    ]
+  },
+  "accounts": [
+    {
+      "id": "CH1200778010203040506",
+      "iban": "CH1200778010203040506",
+      "client_id": "urs",
+      "type": "private",
+      "name": "Privatkonto",
+      "currency": "CHF",
+      "balance": 22000.0
+    },
+    {
+      "id": "CH3400778010203040599",
+      "iban": "CH3400778010203040599",
+      "client_id": "urs",
+      "type": "savings",
+      "name": "Sparkonto",
+      "currency": "CHF",
+      "balance": 48000.0
+    },
+    {
+      "id": "CH5600778010203040511",
+      "iban": "CH5600778010203040511",
+      "client_id": "urs",
+      "type": "securities",
+      "name": "Wertschriftendepot",
+      "currency": "CHF",
+      "balance": 185000.0
+    }
+  ],
+  "positions": []
+}

@@ -1,0 +1,16 @@
+# Family life-event bundle. (verify) cantonal values.
+child_allowance_monthly: {default: 215, ZH: 215, AG: 200, LU: 210}
+childcare:
+  daycare_full_day: 130            # CHF/day, unsubsidised (verify)
+  days_per_week: 2
+  subsidy_share: 0.2               # typical subsidy for middle incomes (estimate)
+  start_after_months: 5
+  until_age_years: 4               # then kindergarten + after-school care (cheaper)
+child_costs_monthly: 650           # food, clothes, activities (estimate)
+child_health_premium_monthly: 110
+extra_housing_monthly: 450         # one more room
+maternity:
+  weeks: 14
+  replacement: 0.80
+  daily_cap: 220
+  unpaid_extra_months: 2           # optional unpaid leave (editable)

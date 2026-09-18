@@ -1,0 +1,32 @@
+# Application settings. Env vars override a few of these (see mygoal/config.py).
+simulation:
+  n_paths: 1000            # interactive (toggles)
+  n_paths_final: 2000      # headline numbers, tests
+  seed: 20260918           # common random numbers: every scenario sees the same futures
+  success_threshold: 0.70  # "on track" means >= 7 of 10 futures
+  horizon_years_after_target: 12
+  max_horizon_years: 40
+
+planning:
+  buffer_months: 3            # months of fixed costs kept as emergency reserve, never spent on goals
+  idle_cash_buffer_months: 6  # cash above this many months of spending counts as "idle"
+  effort_weight: {none: 1.0, low: 1.3, medium: 2.0, high: 3.0}
+  auto_plan_excluded_groups: [goal_change, life_event]
+  auto_plan_excluded_levers: [use_pillar2]        # shown as a trade-off option instead (costs retirement money)
+  auto_plan_weight_multiplier: {use_pillar2: 2.5}   # levers with costs elsewhere (retirement) come last
+
+data:
+  source: synthetic           # adapter name, see mygoal/adapters
+  dir: data/synthetic
+
+llm:
+  provider: auto              # auto | anthropic | openai | openai_compat | none   (env: LLM_PROVIDER)
+  agent_model: claude-sonnet-5
+  fast_model: claude-haiku-4-5
+  openai_api_model: gpt-5.6-luna               # OpenAI cloud, needs OPENAI_API_KEY  (env: OPENAI_API_MODEL)
+  openai_api_reasoning_effort: none            # gpt-5.x needs "none" for tools on chat completions; "" = don't send (non-reasoning models)  (env: OPENAI_REASONING_EFFORT)
+  openai_base_url: http://localhost:1234/v1   # LM Studio / vLLM / llama.cpp  (env: OPENAI_BASE_URL)
+  openai_model: local-model                   # (env: OPENAI_MODEL)
+  max_agent_steps: 6
+  max_questions: 2
+  categorise_with_llm: false  # batch-label unknown merchants (cached); off by default for reproducibility

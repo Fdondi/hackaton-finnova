@@ -1,0 +1,9 @@
+# Rough marginal income-tax rates (federal + cantonal + communal, single, no church tax).
+# ESTIMATES used only for 3a tax savings and side income; replace with the ESTV tax calculator.
+# Keys are taxable-income upper bounds in CHF.
+marginal_rate:
+  default: [[50000, 0.15], [80000, 0.22], [110000, 0.27], [150000, 0.31], [250000, 0.35], [1.0e12, 0.39]]
+  ZH:      [[50000, 0.16], [80000, 0.23], [110000, 0.28], [150000, 0.32], [250000, 0.36], [1.0e12, 0.40]]
+  ZG:      [[50000, 0.10], [80000, 0.14], [110000, 0.17], [150000, 0.20], [250000, 0.23], [1.0e12, 0.25]]
+self_employed_social_rate: 0.10    # AHV/IV/EO for self-employed side income (estimate)
+tax_refund_lag_months: 8
