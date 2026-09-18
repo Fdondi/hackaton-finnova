@@ -49,6 +49,8 @@ worst_case:
   generic: "No single dramatic event here — a mix of smaller setbacks in income, spending and markets adds up."
 
 lever:
+  month_gained: "1 month sooner"
+  month_lost: "1 month later"
   more_futures: "+{n} in 100 futures"
   month_gained_one: "1 month sooner"
   month_lost_one: "1 month later"
@@ -164,7 +166,7 @@ ui:
   whatif_title: "Ask \"what if\" (AI)"
   whatif_placeholder: "What if I… (e.g. sell my Warhammer collection)"
   whatif_button: "Try it"
-  why: "Why?"
+  why: "Details"
   assumptions: "Assumptions"
   advisor_view: "Advisor view"
   client_view: "Client view"

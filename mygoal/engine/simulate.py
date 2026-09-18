@@ -57,7 +57,8 @@ def _credit_rates(base: Baseline, T: int) -> np.ndarray:
 def simulate(base: Baseline, impacts: list[LeverImpact], market: Market, T: int, N: int, seed: int) -> Trajectories:
     rb = bank_for(seed, T, N)
     comp = compile_impacts(impacts, base.start, T, N, seed, market)
-    mu_i, sd_i = market.monthly_lognormal(str(comp.settings.get("portfolio", base.portfolio)), comp.settings.get("portfolio_return"))
+    mu_i, sd_i = market.monthly_lognormal(str(comp.settings.get("portfolio", base.portfolio)), comp.settings.get("portfolio_return"),
+                                          comp.settings.get("portfolio_volatility"))
     mu_3, sd_3 = market.monthly_lognormal(str(comp.settings.get("p3a_portfolio", base.p3a_portfolio)))
     infl_mu, infl_sd = market.inflation_mean / 12, market.inflation_sd / math.sqrt(12)
     h_mu, h_sd = market.house_growth_mean / 12, market.house_growth_sd / math.sqrt(12)

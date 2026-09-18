@@ -206,12 +206,12 @@ class TestdataSource:
             price = canton_price["median"] if canton_price.get("n", 0) >= 5 else self.prices.get("overall_median", 800_000)
             price = max(s["min_price"], min(price, s["max_income_multiple"] * gross_estimate)) if gross_estimate else price
             goals.append(GoalSpec(id=s["id"], type="home", label=s["label"].format(canton=client.canton or ""),
-                                  target_date=add_months(as_of.replace(day=1), 12 * s["years"]),
+                                  target_date=date(as_of.year + s["years"], 6, 1),
                                   params={"price": round(price, -4), "canton": client.canton}, status="suggested", origin="data",
                                   note="You rent; typical price of homes owned by the bank's clients in your canton"))
         if (s := seeds.get("travel")) and applies(s["when"]):
             goals.append(GoalSpec(id=s["id"], type="target", label=s["label"], priority=2,
-                                  target_date=add_months(as_of.replace(day=1), 12 * s["years"]), params={"amount": s["amount"]},
+                                  target_date=date(as_of.year + s["years"], 6, 1), params={"amount": s["amount"]},
                                   status="suggested", origin="data", note="Travel is one of your interests"))
         if (s := seeds.get("retirement")) and applies(s["when"]):
             goals.append(GoalSpec(id=s["id"], type="retirement", label=s["label"], priority=3,

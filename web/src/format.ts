@@ -11,10 +11,10 @@ export function chfCompact(x: number): string {
   return `${Math.round(x)}`
 }
 
-export function monthLabel(iso: string | null | undefined, months: string[]): string {
+/** Dates are shown as years only (goal dates are June 1). `months` is kept for callers. */
+export function monthLabel(iso: string | null | undefined, _months?: string[]): string {
   if (!iso) return '–'
-  const [y, m] = iso.split('-').map(Number)
-  return `${months[m - 1]} ${y}`
+  return iso.slice(0, 4)
 }
 
 export function monthsBetween(a: string, b: string): number {

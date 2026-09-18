@@ -115,6 +115,10 @@ class Reallocate(Base):
     to_bucket: Literal["cash", "invested", "p3a", "p2"] = "invested"
     once_amount: Estimate | None = None
     monthly_amount: Estimate | None = None
+    expected_return: Estimate | None = Field(None, description="Investing: expected yearly return as a share, e.g. 0.10; "
+                                             "set with volatility for a strategy (stock trading, crypto, a fund)")
+    volatility: float | None = Field(None, description="Investing: yearly volatility as a share, e.g. 0.15 index fund, "
+                                     "0.35 active stock trading, 0.7 crypto")
 
 
 class GoalChangePrimitive(Base):
@@ -260,7 +264,13 @@ def reallocate(p: Reallocate, ctx: LeverContext, lever_id: str, book: Assumption
     if p.monthly_amount is not None:
         v = p.monthly_amount.read(book, "monthly_amount")
         allocs.append(AllocationDelta(start=ctx.start, from_bucket=p.from_bucket, to_bucket=p.to_bucket, mode="monthly", amount=fixed(v)))
-    return _impact(p, lever_id, book, confidence="estimated", allocation_changes=allocs)
+    settings: dict = {}
+    if p.to_bucket == "invested" and p.expected_return is not None:   # the invested money follows this strategy
+        settings["portfolio_return"] = p.expected_return.read(book, "expected_return")
+    if p.to_bucket == "invested" and p.volatility is not None:
+        settings["portfolio_volatility"] = book.get("volatility", float(p.volatility), label="Volatility of the strategy",
+                                                    unit="%/yr", source="llm_estimate", low=0.0, high=1.0, step=0.05)
+    return _impact(p, lever_id, book, confidence="estimated", allocation_changes=allocs, settings=settings)
 
 
 @primitive("goal_change", GoalChangePrimitive, "Change the goal itself: cheaper home, smaller amount, later date.")

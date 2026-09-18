@@ -74,7 +74,7 @@ class RetirementGoal:
     def default_target(self, spec: GoalSpec, base) -> date | None:
         params = RetirementParams.model_validate(spec.params)
         if base.birth_year:
-            return date(base.birth_year + params.retirement_age, 1, 1)
+            return date(base.birth_year + params.retirement_age, 6, 1)
         return None
 
     def horizon_end(self, spec, params: RetirementParams, base) -> date | None:

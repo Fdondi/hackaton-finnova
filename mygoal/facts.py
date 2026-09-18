@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from .agent.goal_assistant import _json, situation
 from .explain import chf, t
+from .explain.translate import tr
 from .llm import get_llm
 
 if TYPE_CHECKING:
@@ -36,9 +37,9 @@ def fmt(value: float, unit: str) -> str:
 
 def _fact(id: str, group: str, kind: str, label: str, display: str, lang: str, source: str | None = None, value: Any = None,
           unit: str = "", editable: bool = False, input: str = "none", note: str | None = None, **extra) -> dict[str, Any]:
-    return {"id": id, "group": group, "kind": kind, "label": label, "display": display, "value": value, "unit": unit,
-            "source": source, "source_label": t(f"sources.{source}", lang) if source else None, "editable": editable,
-            "input": input, "note": note, **extra}
+    return {"id": id, "group": group, "kind": kind, "label": tr(label, lang), "display": tr(display, lang), "value": value,
+            "unit": unit, "source": source, "source_label": t(f"sources.{source}", lang) if source else None,
+            "editable": editable, "input": input, "note": tr(note, lang), **extra}
 
 
 def build(svc: "PlanningService", client_id: str, overrides: dict | None = None, lang: str = "en") -> dict[str, Any]:
@@ -63,7 +64,7 @@ def build(svc: "PlanningService", client_id: str, overrides: dict | None = None,
 
     def shown(f: dict | None, display: str | None = None, label: str | None = None) -> dict | None:
         if f is not None:
-            f.update({k: v for k, v in (("display", display), ("label", label)) if v is not None})
+            f.update({k: tr(v, lang) for k, v in (("display", display), ("label", label)) if v is not None})
         return f
 
     money = [f for f in [
@@ -116,7 +117,7 @@ def build(svc: "PlanningService", client_id: str, overrides: dict | None = None,
     return {
         "money": money, "life": life, "future": future, "notes": notes,
         "summary": {"money_in": round(money_in), "money_out": round(money_out), "free_cash": round(money_in - money_out)},
-        "as_of": p.as_of, "data_notes": [n.model_dump() for n in p.data_quality],
+        "as_of": p.as_of, "data_notes": [{**n.model_dump(), "message": tr(n.message, lang)} for n in p.data_quality],
     }
 
 

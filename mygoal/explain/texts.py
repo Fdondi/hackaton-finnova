@@ -42,7 +42,7 @@ def chf(x: float | None, lang: str = "en") -> str:
 def month(d: date | None, lang: str = "en") -> str:
     if d is None:
         return "–"
-    return f"{strings(lang)['months'][d.month - 1]} {d.year}"
+    return str(d.year)          # the client sees years only (goal dates are June 1)
 
 
 def pct(x: float) -> str:

@@ -34,9 +34,11 @@ class Market:
     bill_mu: float = 0.0
     bill_sigma: float = 0.0
 
-    def monthly_lognormal(self, portfolio: str, expected_return: float | None = None) -> tuple[float, float]:
+    def monthly_lognormal(self, portfolio: str, expected_return: float | None = None,
+                          volatility: float | None = None) -> tuple[float, float]:
         r, vol = self.portfolios.get(portfolio, self.portfolios["balanced"])
         r = r if expected_return is None else expected_return
+        vol = vol if volatility is None else volatility
         sd = vol / math.sqrt(12)
         return math.log(1 + r) / 12 - 0.5 * sd * sd, sd
 
@@ -56,10 +58,11 @@ def build_market(cfg: Config, book: AssumptionBook, risk: "RiskProfile | None" =
             job_note = f"Measured on {risk.segment_label} in the bank's data; typical gap {job_months:.0f} month(s)"
         noise = risk.expense_noise_sd or noise
         bill_mu, bill_sigma = risk.bill_mu, risk.bill_sigma
-        bill_rate = book.get("big_bill_rate", risk.bill_rate, label=f"Unexpected bills over CHF {risk.bill_threshold:,.0f} per year".replace(",", "'"),
+        ch = lambda v: f"CHF {v:,.0f}".replace(",", "'")  # noqa: E731
+        bill_rate = book.get("big_bill_rate", risk.bill_rate, label=f"Unexpected bills over {ch(risk.bill_threshold)} per year",
                              unit="per year", source="population", low=0.0, high=6.0, step=0.1,
-                             note=f"{risk.segment_label}: {risk.segment_rate:.1f} a year, typically CHF {risk.bill_p50 or 0:,.0f}; "
-                                  f"you had {risk.personal_bills} in the last 12 months".replace(",", "'"))
+                             note=f"{risk.segment_label}: {risk.segment_rate:.1f} a year, typically {ch(risk.bill_p50 or 0)}; "
+                                  f"you had {risk.personal_bills} in the last 12 months")
     port = dict(m["portfolios"])
     default = m.get("default_portfolio", "balanced")
     ret = book.get("portfolio_return", port[default]["expected_return"], label=f"Expected return, {default} portfolio",

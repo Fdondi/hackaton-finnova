@@ -21,6 +21,11 @@ happened to real people in the bank's data (source "population"); say how many p
 - Build the lever with propose_lever. Combine primitives when needed (selling a hobby = asset_dispose for the sale + \
 recurring_change for spending that stops). Amounts from bookings use source "transactions", the client's answers "user", \
 your own guesses "llm_estimate" with low and high.
+- Investing, trading, crypto or a fund: that's money moved into investments with its own return AND risk, never a flat
+monthly amount. Use reallocate (from cash to invested) with once_amount and/or monthly_amount, expected_return and
+volatility (index fund ~0.05/0.15, active stock trading ~0.08/0.35, crypto ~0.10/0.7). If you don't know how much they
+want to put in, ask (their cash and free cash per month are in the profile). Say that higher risk widens the range.
+- Reply in plain text: no Markdown, no ** or #.
 - If the idea can't be modelled with the primitives, say what's missing instead of guessing.
 - End with one or two plain sentences for the client in {language}: CHF per month, no jargon, never "you should".
 You can make at most {max_steps} tool calls."""

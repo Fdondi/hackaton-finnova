@@ -27,6 +27,7 @@ export interface GoalSpec {
   status?: 'suggested' | 'confirmed'
   origin?: 'data' | 'ai' | 'user'
   note?: string | null
+  i18n?: Record<string, { label: string; note: string }>
 }
 
 export type DraftResult =
@@ -48,6 +49,9 @@ export interface TimelineGoal {
   proposal: string[]
   p_proposal: number | null
   move_to: { date: string; retirement_age: number | null } | null
+  shortfall: number | null
+  p_preview: number | null
+  shortfall_preview: number | null
 }
 
 /** All confirmed goals on one chart (mygoal/timeline.py). */
@@ -339,7 +343,7 @@ export const api = {
   upsertGoal: (client: string, goal: GoalSpec) =>
     call<GoalSpec[]>(`/clients/${client}/goals/${goal.id}`, { method: 'PUT', body: JSON.stringify(goal) }),
   advisor: (client: string, goal: string, lang: string) => call<AdvisorAgenda>(`/clients/${client}/advisor?goal_id=${goal}&lang=${lang}`),
-  goals: (client: string) => call<GoalSpec[]>(`/clients/${client}/goals`),
+  goals: (client: string, lang = 'en') => call<GoalSpec[]>(`/clients/${client}/goals?lang=${lang}`),
   deleteGoal: (client: string, goal: string) => call<GoalSpec[]>(`/clients/${client}/goals/${goal}`, { method: 'DELETE' }),
   suggestGoals: (client: string, lang: string) =>
     call<GoalSpec[]>(`/clients/${client}/goals/suggest`, { method: 'POST', body: JSON.stringify({ lang }) }),
@@ -353,7 +357,7 @@ export const api = {
     call<{ reply: string; changed: string[]; overrides: Overrides; facts: Facts }>(`/clients/${client}/facts/chat`,
       { method: 'POST', body: JSON.stringify({ message, overrides, lang }) }),
   factsReading: (client: string, lang: string) => call<FactsReading>(`/clients/${client}/facts/ai?lang=${lang}`),
-  timeline: (client: string, body: { active: string[]; overrides: Overrides; lang: string }, signal?: AbortSignal) =>
+  timeline: (client: string, body: { active: string[]; overrides: Overrides; lang: string; preview?: Record<string, string[]>; listed?: string[] }, signal?: AbortSignal) =>
     call<Timeline>(`/clients/${client}/timeline`, { method: 'POST', body: JSON.stringify(body), signal }),
   goalIdeas: (client: string, goal: string, lang: string) =>
     call<{ ids: string[] }>(`/clients/${client}/goals/${goal}/ideas`, { method: 'POST', body: JSON.stringify({ lang }) }),

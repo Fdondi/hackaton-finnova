@@ -37,6 +37,10 @@ docker compose up --build        # picks up .env automatically
 #     (--format docker keeps the HEALTHCHECK; package downloads are cached between builds)
 ```
 
+**Languages.** UI strings live in `mygoal/explain/i18n/<lang>.yaml`; the engine writes English and
+`mygoal/explain/translate.py` translates its labels and sentences at the API boundary (`labels`, `label_patterns`,
+`unit_words` in the same YAML). AI-suggested goals are translated once per language.
+
 **LLM (optional).** `LLM_PROVIDER=auto` uses Claude when `ANTHROPIC_API_KEY` (or an `ant auth login` profile) is
 present, else the OpenAI cloud API when `OPENAI_API_KEY` is set (cheaper than Claude's fast model), else a local
 OpenAI-compatible server at `OPENAI_BASE_URL` (LM Studio, vLLM, llama.cpp) if it answers, else none. Without an
@@ -55,11 +59,18 @@ OpenAI cloud runs with `reasoning_effort: none` because gpt-5.x rejects function
    the LLM may ask one question, and without an LLM a small parser asks for a missing amount. Goals carry
    `status` (suggested | confirmed), `origin` (data | ai | user) and a `note` saying why. Only confirmed goals are
    simulated in the overview and affect other goals.
-2. **Main** (`pages/MainPage.tsx`): the scenario (today's path vs what the goal needs, "+5m" late) and the action plan
-   (the engine's recommended levers, pre-selected on first visit, each a checkbox), plus the what-if box.
-   **Pro mode** is the full dashboard (fan chart with a worst-to-best future slider, levers, risk, advisor, data).
+2. **Main** (`pages/MainPage.tsx`, `mygoal/timeline.py`, `POST /timeline`): every confirmed goal on one chart. Spending
+   goals take their money out at their date (a vertical drop), saving goals ("have X set aside", `kind: save`) and pension
+   money are locked in their own colors; each goal's chance counts the goals before it as paid. Only *accepted* actions
+   change the chart. A goal failing in more than `app.planning.alert_failure` (10%) of futures gets a red card: its
+   chance and expected shortfall, the engine's standard plan plus the AI's ad-hoc ideas (`POST /goals/{id}/ideas`,
+   validated primitives, kept only if the engine says they help), pre-selected and previewed until accepted; unticked
+   actions move to the bottom, the bin deletes them. Each what-if becomes a provisional card (accept or discard) and the
+   box is free again at once. "Move the date" suggests the June when 9 of 10 futures make it. Dates are years (goals
+   are June 1). **Pro mode** is the full dashboard (fan chart with a worst-to-best future slider, levers, risk, advisor).
 3. **Facts** ("See the data we're working with", `pages/FactsPage.tsx`, `mygoal/facts.py`): money in - out = free
-   cash, life facts (known / assumed / you told us), assumptions about the future, all editable; a chat at the
+   cash, life facts (known / assumed / you told us), assumptions about the future, every line editable (edits feed the
+   engine: balances, income, housing and car costs, age and canton rebuild the profile); a chat at the
    bottom turns "my gross salary is 118k, we're expecting a baby" into edits and notes. Numbers only ever come from
    the data or the client; the LLM reads, phrases and maps (`POST /facts`, `/facts/edit`, `/facts/chat`, `GET /facts/ai`).
 

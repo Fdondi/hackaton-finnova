@@ -49,6 +49,8 @@ worst_case:
   generic: "Kein einzelnes dramatisches Ereignis — eine Mischung aus kleineren Rückschlägen bei Einkommen, Ausgaben und Märkten summiert sich."
 
 lever:
+  month_gained: "1 Monat früher"
+  month_lost: "1 Monat später"
   more_futures: "+{n} von 100 Zukünften"
   month_gained_one: "1 Monat früher"
   month_lost_one: "1 Monat später"
@@ -96,6 +98,8 @@ sources:
   llm_estimate: "KI-Schätzung, bitte prüfen"
 
 ui:
+  explain_worst: "Warum so schlecht?"
+  worst_case_valid_for: "Diese Erklärung gilt für {start} – {end}"
   risk_rate: "Grosse Rechnungen pro Jahr"
   risk_bad_year: "Schlechtes Jahr (1 von 10)"
   risk_cushion: "Ihr Bargeld deckt das"
@@ -161,7 +165,7 @@ ui:
   whatif_title: "„Was wäre, wenn“ fragen (KI)"
   whatif_placeholder: "Was wäre, wenn ich… (z.B. meine Warhammer-Sammlung verkaufe)"
   whatif_button: "Ausprobieren"
-  why: "Warum?"
+  why: "Details"
   assumptions: "Annahmen"
   advisor_view: "Beratersicht"
   client_view: "Kundensicht"
@@ -193,10 +197,45 @@ lever_titles:
   give_up_leased_car: "Auto bei Leasingende zurückgeben"
   kvg_deductible: "Franchise auf {deductible} erhöhen"
   have_child: "Ein Kind bekommen"
+  wedding: "Heiraten"
+  separation: "Trennung"
+  job_change: "Stelle wechseln"
   retire_later: "Mit {age} statt {from} pensionieren"
   lower_retirement_spending: "Pension mit {amount}/Monat planen"
 
 flow:
+  suggestions: "Vorschläge für Sie"
+  your_goals_list: "Ihre Ziele"
+  year: "Jahr"
+  money_at_date: "An diesem Datum wird das Geld…"
+  kind_spend: "ausgegeben (ein Auto, eine Reise)"
+  kind_save: "gespart behalten (ein Fonds, eine Reserve)"
+  your_goals: "Ihre Ziele über die Zeit"
+  available: "Verfügbar"
+  locked_goals: "Für Ziele reserviert"
+  pension_locked: "Vorsorge (gebunden)"
+  bad_case: "Schlechter Fall (1 von 10)"
+  accepted_only: "Enthält nur die Massnahmen, die Sie angenommen haben."
+  kept_saved: "bleibt gespart"
+  chance: "{pct} wahrscheinlich"
+  shortfall_short: "Fehlbetrag ~{amount}"
+  shortfall: "Erwarteter Fehlbetrag bis {year}: {amount}."
+  at_age: "mit {age}"
+  fail_chance: "Ohne Änderungen: {pct} Risiko, dass Sie es nicht schaffen."
+  our_proposal: "Was helfen würde"
+  with_accepted: "Mit Ihren angenommenen Massnahmen: {pct} Risiko, es nicht zu schaffen."
+  if_accept: "Wenn Sie die {n} ausgewählten annehmen: {pct} Risiko, es nicht zu schaffen."
+  accept_selected: "Ausgewählte annehmen"
+  accepted: "Angenommen"
+  ai_idea: "KI-Idee"
+  ai_thinking: "Die KI sucht Ideen, die zu Ihnen passen…"
+  details: "Details"
+  or_move: "Oder das Datum verschieben: {when} schaffen es 9 von 10 Zukünften."
+  move_to: "Auf {when} verschieben"
+  discard: "Verwerfen"
+  working: "Wird berechnet…"
+  accept_action: "Diese Massnahme annehmen"
+  how_ai_worked: "{n} Schritte"
   hello: "Hallo {name}"
   goals_title: "Was ist Ihr finanzielles Ziel?"
   goals_help: "Wir haben aus Ihren Kontodaten ein paar Ziele vorgeschlagen. Bestätigen Sie die passenden, ändern oder löschen Sie die anderen, oder schreiben Sie Ihr eigenes Ziel in eigenen Worten: «ein Auto in einem Jahr», «mit 60 in Pension», «eine Wohnung in Zürich für 900k»."
@@ -212,7 +251,7 @@ flow:
   answer: "Antworten"
   continue: "Meinen Plan zeigen"
   n_confirmed: "{n} Ziel(e) bestätigt"
-  confirm_hint: "Bestätigen Sie mindestens ein Ziel mit ✓"
+  confirm_hint: "Nehmen Sie einen Vorschlag mit ✓ an oder schreiben Sie unten Ihr eigenes Ziel"
   see_data: "Die Daten, mit denen wir rechnen"
   disclaimer: "Wir nutzen KI. Die Vorschläge kombinieren die Daten der Bank über Sie, öffentliche Daten (Preise, Statistiken) und Ihre Angaben. Es sind Schätzungen, die Sie ändern können; die Prognosen werden berechnet, nicht von der KI geschrieben."
   scenario: "Szenario"
@@ -260,3 +299,174 @@ flow:
   pick_p75: "Über dem Durchschnitt"
   pick_p90: "Gut (1 von 10)"
   pick_p_max: "Beste von 1'000"
+
+# ---- engine labels and sentences (mygoal/explain/translate.py) ----
+labels:
+  "Asset split and lawyers": "Vermögensteilung und Anwalt"
+  "Baby expected in": "Baby erwartet in"
+  "Car costs per month": "Autokosten pro Monat"
+  "Cash on your accounts": "Bargeld auf Ihren Konten"
+  "Chance of losing your job in a year": "Risiko eines Stellenverlusts pro Jahr"
+  "Chance of a gap in salary in a year": "Risiko einer Lohnlücke pro Jahr"
+  "Costs around the birth (hospital deductible, gear)": "Kosten rund um die Geburt (Spital-Selbstbehalt, Ausstattung)"
+  "Cut restaurants, shopping, leisure and travel by": "Restaurants, Einkäufe, Freizeit und Reisen kürzen um"
+  "Daycare days per week": "Krippentage pro Woche"
+  "Emergency reserve kept aside": "Notreserve, die unangetastet bleibt"
+  "Expected return (balanced)": "Erwartete Rendite (ausgewogen)"
+  "Expected return (conservative)": "Erwartete Rendite (konservativ)"
+  "Expected return (growth)": "Erwartete Rendite (wachstumsorientiert)"
+  "Expected return, balanced portfolio": "Erwartete Rendite, ausgewogenes Portfolio"
+  "Extra rent for more space": "Mehr Miete für mehr Platz"
+  "Extra spending with a baby": "Mehrausgaben mit Baby"
+  "Fixed costs per month": "Fixkosten pro Monat"
+  "Gross annual income (estimated from net salary)": "Bruttojahreseinkommen (aus dem Nettolohn geschätzt)"
+  "Gross annual income": "Bruttojahreseinkommen"
+  "Home price growth": "Wertsteigerung Wohneigentum"
+  "Housing costs per month (rent or mortgage)": "Wohnkosten pro Monat (Miete oder Hypothek)"
+  "Interest on savings accounts": "Zins auf Sparkonten"
+  "Invest now": "Jetzt anlegen"
+  "Investments": "Anlagen"
+  "Kilometres driven per year (from fuel spending)": "Gefahrene Kilometer pro Jahr (aus den Treibstoffkosten)"
+  "Look for a home cheaper by": "Ein Eigenheim günstiger um"
+  "Medical costs per year billed to basic insurance (all adults)": "Arztkosten pro Jahr über die Grundversicherung (alle Erwachsenen)"
+  "Monthly investment plan": "Monatlicher Sparplan"
+  "Months to sell the car": "Monate bis zum Autoverkauf"
+  "Net salary per month (incl. 13th)": "Nettolohn pro Monat (inkl. 13.)"
+  "New job in": "Neue Stelle in"
+  "Other income per month": "Übrige Einnahmen pro Monat"
+  "Pay into pillar 3a": "In die Säule 3a einzahlen"
+  "Pension fund (pillar 2) savings": "Pensionskassenguthaben (2. Säule)"
+  "Pillar 3a payments per month": "Einzahlungen Säule 3a pro Monat"
+  "Pillar 3a savings": "Guthaben Säule 3a"
+  "Plan to spend less in retirement by": "In der Pension weniger ausgeben um"
+  "Premium per month today": "Prämie pro Monat heute"
+  "Real salary growth": "Reales Lohnwachstum"
+  "Reduce the amount by": "Betrag reduzieren um"
+  "Retire later by": "Später pensionieren um"
+  "Separation in": "Trennung in"
+  "Share of a behavioural saving that sticks long-term": "Anteil einer Verhaltensänderung, der langfristig bleibt"
+  "Share of household salary from the parent taking leave": "Anteil des Haushaltslohns des Elternteils in Elternzeit"
+  "Share of those km that would still need a car": "Anteil dieser km, die weiterhin ein Auto brauchen"
+  "Unpaid leave after maternity leave": "Unbezahlter Urlaub nach dem Mutterschaftsurlaub"
+  "Variable spending per month": "Variable Ausgaben pro Monat"
+  "Volatility, balanced portfolio": "Volatilität, ausgewogenes Portfolio"
+  "Volatility of the strategy": "Volatilität der Strategie"
+  "Wedding costs": "Hochzeitskosten"
+  "Wedding in": "Hochzeit in"
+  "What the car costs you per month": "Was Sie das Auto pro Monat kostet"
+  "What the car would sell for": "Verkaufswert des Autos"
+  "Work percentage afterwards": "Arbeitspensum danach"
+  "Your deductible today": "Ihre Franchise heute"
+  "Your marginal tax rate (estimate)": "Ihr Grenzsteuersatz (Schätzung)"
+  # facts page
+  "Adults in the household": "Erwachsene im Haushalt"
+  "Age": "Alter"
+  "Canton": "Kanton"
+  "Car": "Auto"
+  "Children": "Kinder"
+  "Home": "Wohnen"
+  "Interests": "Interessen"
+  "Pillar 3a": "Säule 3a"
+  "Work": "Arbeit"
+  "You told us": "Von Ihnen"
+  "Comma separated": "Mit Komma getrennt"
+  "Married or living together counts as 2": "Verheiratet oder zusammenlebend zählt als 2"
+  "Two letters, e.g. ZH": "Zwei Buchstaben, z.B. ZH"
+  "Estimated from age and salary (mandatory minimum); check the pension statement": "Aus Alter und Lohn geschätzt (gesetzliches Minimum); bitte den Pensionskassenausweis prüfen"
+  "Half of what you save each month today": "Die Hälfte dessen, was Sie heute monatlich sparen"
+  "Partially visible: bills the insurer pays directly never show up in the account": "Nur teilweise sichtbar: Rechnungen, die die Kasse direkt bezahlt, erscheinen nicht auf dem Konto"
+  "No car costs seen": "Keine Autokosten gesehen"
+  "No housing costs seen": "Keine Wohnkosten gesehen"
+  "You own your home": "Sie besitzen Ihr Eigenheim"
+  "No pillar 3a payments seen": "Keine Einzahlungen in die Säule 3a gesehen"
+  # goals suggested from the data
+  "Education fund for the kids": "Ausbildungsfonds für die Kinder"
+  "Three months travelling": "Drei Monate reisen"
+  "A new games console": "Eine neue Spielkonsole"
+  "A sports car": "Ein Sportwagen"
+  "Safety cushion of 3 months": "Notgroschen für 3 Monate"
+  "Everyone working needs this one": "Braucht jede und jeder, der arbeitet"
+  "Ready when your children start their education": "Bereit, wenn Ihre Kinder die Ausbildung beginnen"
+  "Travel is one of your interests": "Reisen gehört zu Ihren Interessen"
+  "You rent; typical price of homes owned by the bank's clients in your canton": "Sie wohnen zur Miete; typischer Preis der Eigenheime von Bankkunden in Ihrem Kanton"
+  "Saved from pocket money in about half a year": "In etwa einem halben Jahr vom Taschengeld gespart"
+  "You drive, and you have the savings for a dream car": "Sie fahren Auto und haben das Geld für ein Traumauto"
+  "Your cash covers less than three months of spending": "Ihr Bargeld deckt weniger als drei Monatsausgaben"
+  # side effects and descriptions without numbers
+  "3a money is locked until retirement, except for buying a home, emigrating or self-employment": "3a-Geld ist bis zur Pensionierung gebunden, ausser für Wohneigentum, Auswanderung oder Selbständigkeit"
+  "Also lowers taxes (child deductions) - not modelled yet": "Senkt auch die Steuern (Kinderabzüge) – noch nicht modelliert"
+  "Housing for two households is not modelled yet": "Wohnen für zwei Haushalte ist noch nicht modelliert"
+  "Pension-fund risk cover may shrink; can be repaid later": "Der Risikoschutz der Pensionskasse kann sinken; später rückzahlbar"
+  "Replacement: Half-fare card + tickets + car sharing": "Ersatz: Halbtax + Billette + Carsharing"
+  "Replacement: GA travelcard + car sharing": "Ersatz: GA + Carsharing"
+  "Some trips take longer, especially evenings and outside cities": "Manche Wege dauern länger, besonders abends und ausserhalb der Städte"
+  "Tell your insurer by 31 Dec (switching insurer: by 30 Nov)": "Bis 31. Dezember der Kasse melden (Kassenwechsel: bis 30. November)"
+  "More years of saving and pension contributions, fewer years to finance.": "Mehr Jahre sparen und einzahlen, weniger Jahre zu finanzieren."
+  "Only 12 months of history: annual bills may be missed": "Nur 12 Monate Verlauf: jährliche Rechnungen könnten fehlen"
+
+label_patterns:
+  - ['Own home in (.+)', 'Eigenheim in \1']
+  - ['Retirement at (\d+)', 'Pensionierung mit \1']
+  - ['Retire early at (\d+)', 'Frühpensionierung mit \1']
+  - ['At (\d+), early retirement is the big question', 'Mit \1 ist die Frühpensionierung die grosse Frage']
+  - ['Unexpected bills over (.+) per year', 'Unerwartete Rechnungen über \1 pro Jahr']
+  - ['Cash above (\d+) months of spending', 'Bargeld über \1 Monatsausgaben']
+  - ['Legal maximum (.+)/year', 'Gesetzliches Maximum \1/Jahr']
+  - ['You have a car: about (.+)/month', 'Sie haben ein Auto: etwa \1/Monat']
+  - ['You rent: (.+)/month', 'Sie wohnen zur Miete: \1/Monat']
+  - ['You own your home: (.+)/month', 'Eigenheim: \1/Monat']
+  - ['You pay (.+)/month into pillar 3a', 'Sie zahlen \1/Monat in die Säule 3a ein']
+  - ['(\d+) months of fixed costs', '\1 Monate Fixkosten']
+  - ['(\d+) \(born (.+)\)', '\1 (geboren \2)']
+  - ['([\d.]+) per year', '\1 pro Jahr']
+  - ['(.+) ≈ (.+)/month', '\1 ≈ \2/Monat']
+  - ['(CHF [\d''’]+)/month', '\1/Monat']
+  - ['(CHF [\d''’]+)/yr', '\1/Jahr']
+  - ['([\d.]+)%/yr', '\1%/Jahr']
+  - ['employed people aged (.+?): ([\d.]+) a year, typically (.+); you had (\d+) in the last 12 months', 'Angestellte von \1 Jahren: \2 pro Jahr, typisch \3; Sie hatten \4 in den letzten 12 Monaten']
+  - ['self-employed people aged (.+?): ([\d.]+) a year, typically (.+); you had (\d+) in the last 12 months', 'Selbständige von \1 Jahren: \2 pro Jahr, typisch \3; Sie hatten \4 in den letzten 12 Monaten']
+  - ['retired people aged (.+?): ([\d.]+) a year, typically (.+); you had (\d+) in the last 12 months', 'Pensionierte von \1 Jahren: \2 pro Jahr, typisch \3; Sie hatten \4 in den letzten 12 Monaten']
+  - ['(.+): ([\d.]+) a year, typically (.+); you had (\d+) in the last 12 months', '\1: \2 pro Jahr, typisch \3; Sie hatten \4 in den letzten 12 Monaten']
+  - ['Measured on (.+) in the bank''s data; typical gap (\d+) month\(s\)', 'Gemessen bei \1 in den Daten der Bank; typische Lücke \2 Monat(e)']
+  - ['Without one-off bills over (.+) \(about (.+)/month\): they are simulated as random shocks', 'Ohne einmalige Rechnungen über \1 (etwa \2/Monat): diese werden als zufällige Ereignisse simuliert']
+  - ['Net salary / ([\d.]+) \(typical social contributions\)', 'Nettolohn / \1 (übliche Sozialabzüge)']
+  - ['Median (.+) in (\d+) separations in the bank''s data \(asset split, lawyers\), capped at 60% of your savings', 'Median \1 bei \2 Trennungen in den Daten der Bank (Vermögensteilung, Anwalt), höchstens 60% Ihres Ersparten']
+  - ['Median change for (\d+) parents in the bank''s data, 4 months after vs before the birth \(seasonally adjusted; 90% range of the median (.+)\)', 'Mediane Veränderung bei \1 Eltern in den Daten der Bank, 4 Monate nach vs. vor der Geburt (saisonbereinigt; 90%-Bereich des Medians \2)']
+  - ['Median of (\d+) births in the bank''s data', 'Median von \1 Geburten in den Daten der Bank']
+  - ['Median of (\d+) weddings in the bank''s data \((.+) had costs; middle half (.+)\)', 'Median von \1 Hochzeiten in den Daten der Bank (\2 mit Kosten; mittlere Hälfte \3)']
+  - ['In a bad health year up to (.+) more than today', 'In einem schlechten Gesundheitsjahr bis zu \1 mehr als heute']
+  - ['Retirement: about (.+) less pension capital, roughly (.+)/month less pension', 'Pension: etwa \1 weniger Alterskapital, rund \2/Monat weniger Rente']
+  - ['Value moves with markets: a bad year can be about (.+)', 'Der Wert schwankt mit den Märkten: ein schlechtes Jahr kann etwa \1 bringen']
+  - ['About (.+)/month\. Behavioural savings tend to fade; we count only part of them long-term\.', 'Etwa \1/Monat. Verhaltensänderungen lassen oft nach; wir rechnen langfristig nur mit einem Teil.']
+  - ['About (.+) instead of (.+): further out, older, or one room less\.', 'Etwa \1 statt \2: etwas weiter draussen, älter oder ein Zimmer weniger.']
+  - ['(CHF [\d''’]+) instead of (CHF [\d''’]+)\.', '\1 statt \2.']
+  - ['(.+)/year into 3a saves about (.+) in taxes each year\.', '\1/Jahr in die Säule 3a spart jedes Jahr etwa \2 Steuern.']
+  - ['Car costs (.+)/month\. The cheapest replacement \(Half-fare card \+ tickets, plus car sharing for (\d+)% of the km\) costs about (.+)/month\.', 'Das Auto kostet \1/Monat. Der günstigste Ersatz (Halbtax + Billette, plus Carsharing für \2% der km) kostet etwa \3/Monat.']
+  - ['Car costs (.+)/month\. The cheapest replacement \(GA travelcard, plus car sharing for (\d+)% of the km\) costs about (.+)/month\.', 'Das Auto kostet \1/Monat. Der günstigste Ersatz (GA, plus Carsharing für \2% der km) kostet etwa \3/Monat.']
+  - ['From month (\d+): about (.+)/month running costs after allowances, (.+)/month daycare for (\d+) days a week, and less income during leave\. Based on (\d+) parents in the bank''s data\.', 'Ab Monat \1: etwa \2/Monat laufende Kosten nach Zulagen, \3/Monat Krippe für \4 Tage pro Woche und weniger Einkommen während der Elternzeit. Basierend auf \5 Eltern in den Daten der Bank.']
+  - ['From month (\d+): about (.+)/month running costs after allowances, (.+)/month daycare for (\d+) days a week, and less income during leave\.', 'Ab Monat \1: etwa \2/Monat laufende Kosten nach Zulagen, \3/Monat Krippe für \4 Tage pro Woche und weniger Einkommen während der Elternzeit.']
+  - ['In the bank''s data, separations cost a median (.+) in the month \(asset split, lawyers\); for you about (.+)\.', 'In den Daten der Bank kosten Trennungen im Median \1 im Trennungsmonat (Vermögensteilung, Anwalt); für Sie etwa \2.']
+  - ['Instead of (.+)/month \(today''s money\): e\.g\. a smaller home or fewer trips\.', 'Statt \1/Monat (in heutigem Geld): z.B. kleiner wohnen oder weniger reisen.']
+  - ['Invest (.+) in a balanced portfolio and (.+)/month through a savings plan\.', '\1 in ein ausgewogenes Portfolio anlegen und \2/Monat über einen Sparplan.']
+  - ['Invest (.+) in a growth portfolio and (.+)/month through a savings plan\.', '\1 in ein wachstumsorientiertes Portfolio anlegen und \2/Monat über einen Sparplan.']
+  - ['Invest (.+) in a conservative portfolio and (.+)/month through a savings plan\.', '\1 in ein konservatives Portfolio anlegen und \2/Monat über einen Sparplan.']
+  - ['Of (\d+) job changes in the bank''s data, the median salary went up (.+), but (.+) took a pay cut \(typically (.+)\)\. Each future draws one of these outcomes\.', 'Bei \1 Stellenwechseln in den Daten der Bank stieg der Lohn im Median um \2, aber \3 verdienten danach weniger (typisch \4). Jede Zukunft zieht eines dieser Ergebnisse.']
+  - ['Premiums drop by (.+)/year\. With your usual medical costs you keep about (.+) a year\.', 'Die Prämien sinken um \1/Jahr. Mit Ihren üblichen Arztkosten bleiben Ihnen etwa \2 pro Jahr.']
+  - ['Weddings in the bank''s data cost a median (.+); monthly spending barely changed afterwards \((\d+) people\)\.', 'Hochzeiten kosten in den Daten der Bank im Median \1; die monatlichen Ausgaben änderten sich danach kaum (\2 Personen).']
+  - ['Withdraw about (.+) from pillar 2 as equity \(taxed at withdrawal\)\.', 'Etwa \1 aus der 2. Säule als Eigenkapital beziehen (bei Bezug besteuert).']
+  - ['Flows explain the balance change: implied (.+) vs actual (.+) CHF over 12 months', 'Die Geldflüsse erklären die Saldoveränderung: berechnet \1 vs. tatsächlich \2 CHF in 12 Monaten']
+  - ['Only (\d+) months of history: annual bills may be missed', 'Nur \1 Monate Verlauf: jährliche Rechnungen könnten fehlen']
+  - ['Test data dates moved forward (\d+) months so the latest month is (.+) \(source data ends (.+)\)', 'Testdaten um \1 Monate verschoben, damit der letzte Monat \2 ist (Quelldaten enden \3)']
+  - ['No bookings in (.+): excluded from monthly averages', 'Keine Buchungen in \1: nicht in den Monatsdurchschnitten']
+  - ['(\d+)% of bookings could not be categorised', '\1% der Buchungen konnten nicht zugeordnet werden']
+
+unit_words:
+  "%/yr": "%/Jahr"
+  "CHF/month": "CHF/Monat"
+  "CHF/yr": "CHF/Jahr"
+  "days": "Tage"
+  "km/yr": "km/Jahr"
+  "months": "Monate"
+  "months of fixed costs": "Monate Fixkosten"
+  "per year": "pro Jahr"
+  "years": "Jahre"

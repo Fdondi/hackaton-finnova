@@ -22,6 +22,7 @@ from .config import Config, load_config
 from .engine import Baseline, build_baseline, build_market
 from .engine.solve import Deadline, GoalOutcome, Planner, apply_goal_changes
 from .explain import DriverInput, chf, month, strings, t, top_drivers
+from .explain.translate import tr, tr_unit
 from .goals import GOALS, parse_params, target_date
 from .levers import LeverContext, build_levers, build_primitive, combine
 from .model import Assumption, AssumptionBook, Dataset, GoalSpec, LeverImpact, months_between
@@ -343,7 +344,33 @@ class PlanningService:
         return outcome.model_copy(update={"fan": outcome.fan.model_copy(update={"worst_case": segs})})
 
     def view(self, a: Assumption, lang: str) -> AssumptionView:
-        return AssumptionView(**a.model_dump(), source_label=t(f"sources.{a.source}", lang))
+        d = a.model_dump()
+        d.update(label=tr(a.label, lang), note=tr(a.note, lang))
+        if lang != "en" and a.unit not in ("share",) and not a.unit.startswith("%"):
+            d["unit"] = tr_unit(a.unit, lang)
+        return AssumptionView(**d, source_label=t(f"sources.{a.source}", lang))
+
+    def lever_title(self, lv: LeverImpact, lang: str) -> str:
+        return t(f"lever_titles.{lv.details.get('title_key', lv.lever_id.split(':')[0])}", lang, default=tr(lv.title, lang),
+                 **lv.details.get("title_args", {}))
+
+    @staticmethod
+    def goal_label(g: GoalSpec, lang: str) -> str:
+        """Suggested goals follow the language (rules: translation table, AI: translated once per language);
+        the client's own words stay as written."""
+        if g.i18n.get(lang, {}).get("label"):
+            return g.i18n[lang]["label"]
+        return tr(g.label, lang) if g.origin == "data" else g.label
+
+    @staticmethod
+    def goal_note(g: GoalSpec, lang: str) -> str | None:
+        if g.i18n.get(lang, {}).get("note"):
+            return g.i18n[lang]["note"]
+        return tr(g.note, lang) if g.origin == "data" else g.note
+
+    def localized_goals(self, client_id: str, lang: str) -> list[GoalSpec]:
+        return [g.model_copy(update={"label": self.goal_label(g, lang), "note": self.goal_note(g, lang)})
+                for g in self.state(client_id).goals]
 
     def cards(self, levers: list[LeverImpact], scores, active: set[str], plan: set[str], lang: str,
               trade_offs: set[str]) -> list[LeverCard]:
@@ -362,10 +389,9 @@ class PlanningService:
                 label = t("lever.no_effect", lang) if s else ""
             cards.append(LeverCard(
                 lever_id=lv.lever_id,
-                title=t(f"lever_titles.{lv.details.get('title_key', lv.lever_id.split(':')[0])}", lang, default=lv.title,
-                        **lv.details.get("title_args", {})),
-                description=lv.description, group=lv.group, effort=lv.effort, confidence=lv.confidence,
-                side_effects=lv.side_effects, product_trigger=lv.product_trigger, icon=lv.icon, origin=lv.origin,
+                title=self.lever_title(lv, lang),
+                description=tr(lv.description, lang), group=lv.group, effort=lv.effort, confidence=lv.confidence,
+                side_effects=[tr(x, lang) for x in lv.side_effects], product_trigger=lv.product_trigger, icon=lv.icon, origin=lv.origin,
                 details=lv.details, assumptions=[self.view(a, lang) for a in lv.assumptions],
                 months_gained=months, delta_p=s.delta_p if s else 0.0,
                 monthly_equivalent=s.monthly_equivalent if s else (lv.headline_monthly or 0.0),
@@ -384,7 +410,7 @@ class PlanningService:
             return month(d, lang)
 
         def headline(o: GoalOutcome) -> str:
-            kw = dict(label=goal.label, target=when(o.target_date), p50=when(o.achieved.p50),
+            kw = dict(label=self.goal_label(goal, lang), target=when(o.target_date), p50=when(o.achieved.p50),
                       n=o.futures_of_10, horizon=month(o.achieved.horizon_end, lang))
             if o.p_success >= 0.7 and o.achieved.p90 is not None and o.achieved.p90 <= o.start:
                 return t("goal.ready", lang, **kw)
@@ -418,7 +444,7 @@ class PlanningService:
             "range": t("goal.range", lang, p10=month(scen.achieved.p10, lang), p90=month(scen.achieved.p90, lang))
             if scen.achieved.p90 and scen.achieved.p10 != scen.achieved.p90 else "",
             "gap": gap_text(gap_b), "gap_scenario": gap_text(gap_s), "deadline": dl,
-            "plan": t("goal.plan", lang, levers=" + ".join(lv.title for lv in plan)) if plan else "",
+            "plan": t("goal.plan", lang, levers=" + ".join(self.lever_title(lv, lang) for lv in plan)) if plan else "",
         }
 
     def cross_goal_for(self, client_id: str, req: PlanRequest) -> list[CrossGoalEffect]:
@@ -469,9 +495,10 @@ class PlanningService:
                 base: Baseline, lang: str) -> CrossGoalEffect:
         fl, tl = self._when_label(target, before, base, lang), self._when_label(target, after, base, lang)
         delta = months_between(before.achieved.p50, after.achieved.p50) if before.achieved.p50 and after.achieved.p50 else None
-        text = t("cross_goal.no_change", lang, source=source.label, other=target.label) if fl == tl or delta == 0 else \
-            t("cross_goal.shift", lang, source=source.label, when=month(when, lang), other=target.label, from_=fl, to=tl)
-        return CrossGoalEffect(source_goal_id=source.id, goal_id=target.id, label=target.label, from_label=fl, to_label=tl,
+        src, tgt = self.goal_label(source, lang), self.goal_label(target, lang)
+        text = t("cross_goal.no_change", lang, source=src, other=tgt) if fl == tl or delta == 0 else \
+            t("cross_goal.shift", lang, source=src, when=month(when, lang), other=tgt, from_=fl, to=tl)
+        return CrossGoalEffect(source_goal_id=source.id, goal_id=target.id, label=tgt, from_label=fl, to_label=tl,
                                delta_months=delta, text=text)
 
     # ---- what-ifs ----
@@ -511,12 +538,12 @@ class PlanningService:
         goals, breach = [], None
         for g in st.goals:
             if g.status != "confirmed":           # suggestions aren't simulated until the client confirms them
-                goals.append({**g.model_dump(mode="json"), "status_info": None})
+                goals.append({**g.model_dump(mode="json"), "label": self.goal_label(g, lang), "status_info": None})
                 continue
             pl = self.planner(client_id, g, {}, None)
             o = pl.outcome([])
             breach = o.p_buffer_breach if breach is None else breach
-            goals.append({**g.model_dump(mode="json"), "status_info": {
+            goals.append({**g.model_dump(mode="json"), "label": self.goal_label(g, lang), "status_info": {
                 "p_success": o.p_success, "futures_of_10": o.futures_of_10, "p50": o.achieved.p50,
                 "target_date": o.target_date,
                 "headline": self.goal_texts(g, o, o, None, None, Deadline(status="ok"), [], lang, base_line=pl.base)["headline"]}})
@@ -547,7 +574,7 @@ class PlanningService:
             "hints": [h.model_dump() for h in p.hints],
             "goals": goals,
             "goal_types": sorted(GOALS),
-            "data_quality": [n.model_dump() for n in p.data_quality],
+            "data_quality": [{**n.model_dump(), "message": tr(n.message, lang)} for n in p.data_quality],
             "recurring": [r.model_dump() for r in p.recurring if r.active],
             "risk": self.risk_view(client_id, breach, market.job_loss_prob, lang),
         }

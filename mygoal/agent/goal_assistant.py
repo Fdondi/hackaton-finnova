@@ -94,7 +94,8 @@ def to_goal(d: dict, as_of: date, canton: str | None, taken: set[str], origin: s
         if amount <= 0:
             return None
         years = float(d.get("years") or (5 if typ == "home" else 2))
-        when = add_months(start, max(1, round(years * 12)))
+        when = date(start.year + max(0, round(years)), 6, 1)          # goal dates are June 1 of a year
+        when = when if when > start else date(start.year + 1, 6, 1)
         kind = "save" if str(d.get("kind", "")).lower().startswith("save") else "spend"
         params = {"price": round(amount, -3), "canton": canton} if typ == "home" else {"amount": round(amount, -1), "kind": kind}
     goal = GoalSpec(id=_slug(label, taken), type=typ, label=label, target_date=when, params=params, status=status, origin=origin,
@@ -130,7 +131,31 @@ def suggest(svc: "PlanningService", client_id: str, lang: str = "en", use_llm: b
     """Add suggestions to the client's goal list (rules always, the LLM once per client). Returns the full list."""
     st = svc.state(client_id)
     with st.lock:           # a second call waits for the first one's LLM ideas instead of returning without them
-        return _suggest(svc, client_id, st, lang, use_llm)
+        goals = _suggest(svc, client_id, st, lang, use_llm)
+        if use_llm:
+            _translate_ai_goals(svc, st, lang)
+        return goals
+
+
+def _translate_ai_goals(svc: "PlanningService", st, lang: str) -> None:
+    """AI suggestions were written in the language of the moment: translate them once when the client switches."""
+    todo = [g for g in st.goals if g.origin == "ai" and lang not in g.i18n]
+    llm = get_llm(svc.cfg) if todo else None
+    if llm is None:
+        return
+    items = [{"id": g.id, "label": g.label, "note": g.note or ""} for g in todo]
+    try:
+        out = _json(llm.complete(f"Translate these goal labels and notes into {'German' if lang == 'de' else 'English'} "
+                                 "(Swiss usage, keep them short). Output JSON only: {\"items\": [{\"id\", \"label\", \"note\"}]}",
+                                 json.dumps({"items": items}, ensure_ascii=False), 1500)).get("items", [])
+    except Exception as exc:
+        log.warning("goal translation failed: %s", exc)
+        return
+    by_id = {str(x.get("id")): x for x in out}
+    with st.goals_lock:
+        for g in st.goals:
+            if g.id in by_id:
+                g.i18n[lang] = {"label": str(by_id[g.id].get("label") or g.label)[:60], "note": str(by_id[g.id].get("note") or "")[:200]}
 
 
 _GENERIC = {"fund", "your", "with", "from", "goal", "save", "saving", "savings", "plan", "family", "für", "eine", "einen",
@@ -181,6 +206,8 @@ def _suggest(svc: "PlanningService", client_id: str, st, lang: str, use_llm: boo
         except Exception:
             g = None
         if g is not None:
+            if origin == "ai":
+                g.i18n[lang] = {"label": g.label, "note": g.note or ""}
             with st.goals_lock:                    # the client may be deleting or confirming meanwhile
                 if not any(_same_idea(x, g) for x in st.goals):
                     st.goals = [*st.goals, g]
@@ -258,9 +285,13 @@ def draft(svc: "PlanningService", client_id: str, text: str, lang: str = "en", q
                         else "Wie viel wird es ungefähr kosten (CHF)?"}
             return {"status": "error", "message": "Sorry, I couldn't read an amount. Try e.g. 'a car for CHF 30'000 in 2 years'."}
         d["reason"] = "Read from your sentence" if lang != "de" else "Aus Ihrem Satz gelesen"
-    goal = to_goal(d, as_of, canton, {g.id for g in st.goals}, "user")
+    goal = to_goal(d, as_of, canton, {g.id for g in st.goals}, "user", status="confirmed")   # they asked for it
     if goal is None:
         return {"status": "error", "message": "Sorry, I couldn't turn that into a goal."}
+    same = next((g for g in st.goals if g.type == goal.type and g.label.lower() == goal.label.lower()
+                 and g.target_date == goal.target_date and g.params == goal.params), None)
+    if same is not None:                                  # typed twice: keep one
+        return {"status": "goal", "goal": same}
     with st.goals_lock:
         st.goals = [*st.goals, goal]
         st.version += 1

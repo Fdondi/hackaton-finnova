@@ -20,3 +20,4 @@ class GoalSpec(BaseModel):
     status: Literal["suggested", "confirmed"] = "confirmed"   # suggestions wait for the client's OK on the goals page
     origin: Literal["data", "ai", "user"] = "user"            # rules on the bank's data, the LLM, or the client
     note: str | None = None                                    # why it was suggested / how the amount was estimated
+    i18n: dict[str, dict[str, str]] = Field(default_factory=dict)   # lang -> {"label", "note"} for AI suggestions
