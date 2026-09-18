@@ -17,7 +17,9 @@ most, and how one decision moves your other goals.
 ```bash
 uv sync --all-extras                      # Python 3.12 deps (+ anthropic, openai, streamlit)
 uv run python scripts/gen_data.py --all   # synthetic personas -> data/synthetic/<id>/
-uv run pytest                             # golden tests (~10 s, no LLM needed)
+uv run python scripts/prep_testdata.py    # organisers' testdata (1.2 GB CSV) -> data/testdata/ parquet + population stats (~40 s)
+uv run python scripts/pick_demo_clients.py  # rank story-rich demo clients with the engine -> data/testdata/shortlist.json (~2 min)
+uv run pytest                             # golden tests on the synthetic personas (~10 s, no LLM needed)
 
 # API + built UI on http://localhost:8080  (OpenAPI docs at /docs)
 (cd web && npm install && npm run build)
@@ -41,6 +43,32 @@ LLM everything still works; free-text what-ifs use the rules agent. Force one wi
 Models: `config/app.yaml` -> `llm` (agent `claude-sonnet-5`, fast `claude-haiku-4-5`, OpenAI cloud `gpt-5.6-luna`).
 OpenAI cloud runs with `reasoning_effort: none` because gpt-5.x rejects function tools on chat completions otherwise
 (`OPENAI_REASONING_EFFORT=""` for non-reasoning models). LLM failures are logged as `mygoal.agent` warnings.
+
+---
+
+## The testdata: 8,000 people, and what a population adds
+
+`config/app.yaml` -> `data.source: testdata` (the default now; `synthetic` brings Lena back). The organisers' relational
+CSVs (people, accounts, 2.4M transactions, 2.3M events) are prepared once by `scripts/prep_testdata.py`; the app reads
+only `data/testdata/*.parquet` (66 MB) via `mygoal/adapters/testdata.py` (mapping in `adapters/mappings/testdata.yaml`).
+Dates are moved forward so the last data month is last month (`data.shift_to_today`), with a data note saying so.
+The data has no goals: `config/goal_seeds.yaml` gives each client starting goals (home at the canton's median property
+value from the data, travel for travel lovers, retirement). The UI picker searches all clients; starred ones come first.
+
+What a population makes possible (numbers carry the source `population` = "Bank data: people like you"):
+
+- **Data-calibrated risk** (`mygoal/population.py`, "population" service). One-off bills over CHF 1,000 (legal advice,
+  vet, appliance and car repairs, moving) are measured per segment (age band x employment): about 1.2 a year, median
+  CHF 2,300. The engine draws them as random shocks (compound Poisson, mean-preserving: the client's own big bills leave
+  the variable-spending average), blended with the client's own year (the segment counts like two years of history).
+  Spending noise is measured too. The risk card answers "when does it become critical": a bad year (1 in 10) vs the cash
+  cushion, time to refill it, and how often cash dips below a month of spending. Employees show no salary gaps in the
+  data, so job-loss risk stays at the Swiss default (said out loud in the card); self-employed "gaps" are payment rhythm.
+- **Life-event evidence** (seasonally adjusted before/after per person, bootstrap CIs, n >= 20 or it isn't used):
+  birth +CHF 790/month spending and ~CHF 2,800 around the birth (calibrates `have_child`), weddings a median CHF 36k
+  (`wedding` lever), separations CHF 56k asset split and lawyers (`separation`), job changes +3% median but 46% took a
+  cut (`job_change` draws one real outcome per future). The what-if agent has a `life_event_evidence` tool and cites
+  how many people the numbers come from; keywords route "we're getting married" / "Trennung" to the levers.
 
 ---
 

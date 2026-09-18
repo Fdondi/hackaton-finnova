@@ -3,6 +3,8 @@ import os
 import pytest
 
 os.environ.setdefault("LLM_PROVIDER", "none")   # tests never call a model
+os.environ.setdefault("MYGOAL_DATA_SOURCE", "synthetic")   # golden tests use the synthetic personas (Lena)
+os.environ.setdefault("MYGOAL_DATA_DIR", "data/synthetic")
 
 
 @pytest.fixture(scope="session")

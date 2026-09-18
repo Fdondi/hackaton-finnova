@@ -21,6 +21,8 @@ class RandomBank:
     z_expense: np.ndarray
     u_job: np.ndarray
     z_job_duration: np.ndarray
+    u_bill: np.ndarray      # drawn last: adding them left every earlier draw (and every golden number) unchanged
+    z_bill: np.ndarray
 
 
 @lru_cache(maxsize=16)
@@ -30,6 +32,7 @@ def random_bank(seed: int, months: int, paths: int) -> RandomBank:
     return RandomBank(
         z_market=rng.standard_normal(shape), z_infl=rng.standard_normal(shape), z_house=rng.standard_normal(shape),
         z_expense=rng.standard_normal(shape), u_job=rng.uniform(size=shape), z_job_duration=rng.standard_normal(shape),
+        u_bill=rng.uniform(size=shape), z_bill=rng.standard_normal(shape),
     )
 
 

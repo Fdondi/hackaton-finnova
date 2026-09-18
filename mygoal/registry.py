@@ -56,6 +56,7 @@ PLUGIN_PACKAGES = [
     "mygoal.specialists",
     "mygoal.explain",
     "mygoal.agent",
+    "mygoal.population",
 ]
 
 _loaded = False

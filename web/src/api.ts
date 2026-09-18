@@ -1,6 +1,6 @@
 // Typed client for the FastAPI backend. Mirrors mygoal/service.py models.
 
-export type Source = 'transactions' | 'client_data' | 'user' | 'market_default' | 'llm_estimate'
+export type Source = 'transactions' | 'client_data' | 'user' | 'market_default' | 'llm_estimate' | 'population'
 
 export interface Assumption {
   key: string
@@ -152,6 +152,27 @@ export interface Overview {
   goal_types: string[]
   data_quality: { level: 'info' | 'warning'; message: string }[]
   recurring: RecurringGroup[]
+  risk: RiskView | null
+}
+
+/** Surprise bills and income risk measured on people like this client (population data). */
+export interface RiskView {
+  segment: string
+  segment_label: string
+  n_people: number
+  bill_rate: number
+  bill_threshold: number
+  bill_p50: number | null
+  bill_p90: number | null
+  bad_year: number
+  personal_bills: number
+  causes: string[]
+  cushion: number
+  cushion_times: number | null
+  p_breach: number | null
+  job_prob: number
+  job_source: Source
+  texts: string[]
 }
 
 export interface RecurringGroup {

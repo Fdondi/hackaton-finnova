@@ -5,6 +5,7 @@ import { AdvisorView } from './components/AdvisorView'
 import { DataInsightsView } from './components/DataInsightsView'
 import { GoalCard } from './components/GoalCard'
 import { LeverPanel } from './components/LeverPanel'
+import { RiskCard } from './components/RiskCard'
 import { SpendingCard } from './components/SpendingCard'
 import { StandTiles } from './components/StandTiles'
 import { WhatIfBox } from './components/WhatIfBox'
@@ -16,6 +17,24 @@ function stored(key: string, fallback: string) {
 }
 function store(key: string, value: string) {
   try { localStorage.setItem(key, value) } catch { /* private mode */ }
+}
+
+/** Type-to-search over thousands of clients (population data); starred demo clients come first. */
+function ClientPicker({ clients, clientId, onPick }: { clients: { id: string; name: string }[]; clientId: string | null; onPick: (id: string) => void }) {
+  const [text, setText] = useState('')
+  const byName = useMemo(() => new Map(clients.map((c) => [c.name, c.id])), [clients])
+  const current = clients.find((c) => c.id === clientId)
+  return (
+    <>
+      <input list="client-list" value={text} placeholder={current?.name ?? ''} title={current?.name}
+        onChange={(e) => {
+          const id = byName.get(e.target.value)
+          if (id) { onPick(id); setText('') } else setText(e.target.value)
+        }}
+        className="w-80 max-w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm placeholder:text-ink" />
+      <datalist id="client-list">{clients.map((c) => <option key={c.id} value={c.name} />)}</datalist>
+    </>
+  )
 }
 
 export default function App() {
@@ -106,7 +125,9 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
             <div className="text-lg font-semibold leading-tight">{t('ui.title')}</div>
             <div className="text-xs text-ink-2">{t('ui.subtitle')}</div>
           </div>
-          {clients.length > 1 && (
+          {clients.length > 30 ? (
+            <ClientPicker clients={clients} clientId={clientId} onPick={setClientId} />
+          ) : clients.length > 1 && (
             <select value={clientId ?? ''} onChange={(e) => setClientId(e.target.value)} className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm">
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -160,6 +181,7 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
                     onWhy={() => setWhy('global')}
                     onEditGoal={async (g: GoalSpec) => { await api.upsertGoal(clientId, g); setVersion((v) => v + 1) }} />
                   <div className="mt-4"><SpendingCard ov={overview} /></div>
+                  {overview.risk && <div className="mt-4"><RiskCard risk={overview.risk} /></div>}
                 </div>
                 <div className="lg:col-span-5">
                   <LeverPanel plan={plan} onToggle={toggle} onUsePlan={() => setActive(plan.plan)} onClear={() => setActive([])}

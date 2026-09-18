@@ -41,6 +41,19 @@ class RecurringDelta(BaseModel):
     label: str = ""
 
 
+class ContingentOneOff(BaseModel):
+    """A one-off cash flow whose *timing* is uncertain, not just its size (inheritance, business exit).
+
+    `timing` is months-from-plan-start, sampled once per path; mass that falls beyond the simulated
+    horizon simply never pays out on that path (the event didn't happen yet, or at all, within the run).
+    """
+    amount: Dist
+    timing: Dist
+    bucket: Bucket = "cash"
+    indexed: bool = True
+    label: str = ""
+
+
 class Shock(BaseModel):
     start: date
     end: date | None = None
@@ -92,6 +105,7 @@ class LeverImpact(BaseModel):
     description: str = ""
     group: LeverGroup = "structural"
     one_offs: list[OneOff] = Field(default_factory=list)
+    contingent: list[ContingentOneOff] = Field(default_factory=list)
     recurring: list[RecurringDelta] = Field(default_factory=list)
     shocks: list[Shock] = Field(default_factory=list)
     income_changes: list[IncomeDelta] = Field(default_factory=list)

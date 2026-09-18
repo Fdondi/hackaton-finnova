@@ -3,6 +3,10 @@ specialists:            # phrases that map a what-if to an existing specialist l
   give_up_car: ["car", "auto", "leasing", "vehicle", "fahrzeug"]
   kvg_deductible: ["deductible", "franchise", "krankenkasse", "health insurance", "krankenversicherung"]
   have_child: ["child", "baby", "kid", "kind", "nachwuchs", "familie gründen"]
+  wedding: ["wedding", "marry", "married", "get married", "heiraten", "hochzeit", "heirat", "vermählen"]
+  separation: ["divorce", "divorced", "separation", "separate", "separated", "split up", "scheidung", "scheiden", "trennung",
+               "trennen", "getrennt"]
+  job_change: ["new job", "change jobs", "change job", "switch jobs", "job change", "neue stelle", "stellenwechsel", "jobwechsel"]
   max_3a: ["3a", "pillar 3", "säule 3"]
   invest_idle_cash: ["invest", "etf", "anlegen", "investieren"]
   use_pillar2: ["pension fund", "pillar 2", "pensionskasse", "säule 2", "bvg"]

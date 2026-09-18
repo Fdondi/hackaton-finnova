@@ -1,0 +1,21 @@
+# Starting goals for clients whose data carries none (the testdata). Clients edit them in the goal editor.
+# Rules are checked in this order; each adds at most one goal.
+home:
+  when: {min_age: 25, max_age: 50, renter: true}
+  id: home
+  label: "Own home in {canton}"
+  years: 6                       # target: as_of + years
+  price: canton_median           # population/prices.json (median property value of owners in the data) ...
+  max_income_multiple: 5.5       # ... capped at this multiple of the estimated gross income
+  min_price: 350000
+travel:
+  when: {min_age: 20, max_age: 60, interest_travel: 0.6}
+  id: travel
+  label: "Three months travelling"
+  years: 3
+  amount: 15000
+retirement:
+  when: {min_age: 25, max_age: 62, employment: [employed, self_employed]}
+  id: retire
+  label: "Retirement at 65"
+  retirement_age: 65

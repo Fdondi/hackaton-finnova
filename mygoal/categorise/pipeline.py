@@ -167,6 +167,10 @@ class Categoriser:
             self.llm_stage(unknown)
         for b in unknown:
             if b.category is None:
+                bank_guess = b.extra.get("fallback_category") if b.amount < 0 else None   # adapter's coarse category
+                if bank_guess in self.taxonomy.categories:
+                    b.category, b.category_source = bank_guess, "bank"
+                    continue
                 b.category = "income_other" if b.amount > 0 else "unexplained"
                 b.category_source = "fallback"
         return ds

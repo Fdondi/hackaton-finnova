@@ -7,3 +7,5 @@ web/node_modules/
 web/dist/
 .env
 data/real/
+data/testdata/
+testdata/

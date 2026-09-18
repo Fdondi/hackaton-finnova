@@ -5,9 +5,14 @@ from datetime import date
 
 from pydantic import BaseModel, Field
 
+from typing import TYPE_CHECKING
+
 from ..config import Config
 from ..model import Assumption, AssumptionBook, Client, add_months, month_start
 from ..profile import Profile
+
+if TYPE_CHECKING:
+    from ..population import RiskProfile
 
 
 class Baseline(BaseModel):
@@ -46,7 +51,10 @@ class Baseline(BaseModel):
         return d.year - self.birth_year + (d.month - 6) / 12
 
 
-def build_baseline(profile: Profile, client: Client, cfg: Config, book: AssumptionBook) -> Baseline:
+def build_baseline(profile: Profile, client: Client, cfg: Config, book: AssumptionBook,
+                   risk: "RiskProfile | None" = None) -> Baseline:
+    """With `risk`, the client's own big one-off bills leave the variable-spending average: the engine draws them as
+    random shocks instead (same mean over time, but they arrive in lumps, which is what drains a reserve)."""
     profile_values = {a.key: book.add(a) for a in profile.assumptions}   # gross income, pillar 2: editable here too
     start = add_months(month_start(profile.as_of), 1)
     buffer_months = book.get("buffer_months", cfg.get_path("app.planning.buffer_months", 3),
@@ -56,8 +64,11 @@ def build_baseline(profile: Profile, client: Client, cfg: Config, book: Assumpti
                    source="transactions", unit="CHF/month", step=50)
     fixed = book.get("fixed_costs_monthly", profile.fixed_costs_monthly, label="Fixed costs per month",
                      source="transactions", unit="CHF/month", step=50)
-    variable = book.get("variable_costs_monthly", profile.variable_costs_monthly, label="Variable spending per month",
-                        source="transactions", unit="CHF/month", step=50)
+    lumpy = risk.personal_bill_monthly if risk is not None else 0.0
+    variable = book.get("variable_costs_monthly", profile.variable_costs_monthly - lumpy, label="Variable spending per month",
+                        source="transactions", unit="CHF/month", step=50,
+                        note=f"Without one-off bills over CHF {risk.bill_threshold:,.0f} (about CHF {lumpy:,.0f}/month): "
+                             "they are simulated as random shocks".replace(",", "'") if lumpy > 0 else None)
     bvg = cfg["pension"]["bvg"]
     gross = profile_values.get("gross_income_annual", profile.income.gross_annual)
     p2 = profile_values.get("pillar2_balance", profile.balances.p2)

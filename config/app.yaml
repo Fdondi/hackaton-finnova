@@ -16,8 +16,9 @@ planning:
   auto_plan_weight_multiplier: {use_pillar2: 2.5}   # levers with costs elsewhere (retirement) come last
 
 data:
-  source: synthetic           # adapter name, see mygoal/adapters
-  dir: data/synthetic
+  source: testdata            # adapter name, see mygoal/adapters (synthetic: data/synthetic personas)
+  dir: data/testdata          # testdata: run scripts/prep_testdata.py once
+  shift_to_today: true        # testdata: move dates so the last data month is last month (or "YYYY-MM", or false)
 
 llm:
   provider: auto              # auto | anthropic | openai | openai_compat | none   (env: LLM_PROVIDER)

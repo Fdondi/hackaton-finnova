@@ -1,5 +1,6 @@
 import {
-  Baby, Building2, Car, CircleX, HeartPulse, House, Landmark, Scissors, Sparkles, Target, TrendingUp, type LucideIcon,
+  Baby, Briefcase, Building2, Car, CircleX, Heart, HeartPulse, House, Landmark, Scissors, Sparkles, Split, Target, TrendingUp,
+  type LucideIcon,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { Source } from '../api'
@@ -42,6 +43,7 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
 
 const SOURCE_TONE: Record<Source, Tone> = {
   transactions: 'accent', client_data: 'accent', user: 'good', market_default: 'neutral', llm_estimate: 'llm',
+  population: 'accent',
 }
 
 export function SourceBadge({ source, label }: { source: Source; label: string }) {
@@ -50,7 +52,8 @@ export function SourceBadge({ source, label }: { source: Source; label: string }
 
 const ICONS: Record<string, LucideIcon> = {
   'trending-up': TrendingUp, landmark: Landmark, 'x-circle': CircleX, scissors: Scissors, building: Building2,
-  home: House, target: Target, car: Car, 'heart-pulse': HeartPulse, baby: Baby,
+  home: House, target: Target, car: Car, 'heart-pulse': HeartPulse, baby: Baby, heart: Heart, split: Split,
+  briefcase: Briefcase,
 }
 
 export function LeverIcon({ name, origin }: { name: string | null; origin: string }) {

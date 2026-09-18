@@ -26,6 +26,10 @@ job_loss:
   replacement_rate: 0.75   # unemployment insurance pays 70-80% of insured salary (verify)
 
 expense_noise_sd: 0.10     # monthly noise on variable spending
+big_bills:                 # one-off bills (vet, dentist, repairs) as random shocks. Off here; the population data
+  annual_rate: 0.0         # calibrates them per client (mygoal/population.py), with source `population`
+  size_mu: 7.9             # lognormal bill size: exp(7.9) ~ CHF 2,700
+  size_sigma: 0.8
 behavioural_haircut:       # behavioural savings fade: effect * (floor + (1-floor) * exp(-t/tau))
   floor: 0.5
   tau_months: 12

@@ -67,7 +67,28 @@ groups:
 
 effort: {none: "Kein Aufwand", low: "Wenig Aufwand", medium: "Etwas Aufwand", high: "Grosse Änderung"}
 confidence: {structural: "Solide", behavioural: "Hängt von Gewohnheiten ab", estimated: "Schätzung"}
+risk:
+  title: "Überraschende Rechnungen: Leute wie Sie"
+  bills: "Leute wie Sie ({segment}, {n} in den Daten der Bank) haben pro Jahr etwa {rate} Rechnungen über {threshold}, typisch {p50}."
+  causes: "Am häufigsten: {causes}."
+  yours: "Sie hatten {n} in den letzten 12 Monaten; wir rechnen mit {rate} pro Jahr."
+  bad_year: "In einem schlechten Jahr (1 von 10) summieren sie sich auf {amount}."
+  cushion: "Ihr Bargeld deckt das {times}-mal."
+  cushion_short: "Das ist mehr als Ihr Notgroschen von {liquid}."
+  recover: "Wieder auffüllen dauert etwa {months} Monate Ihres Sparbetrags."
+  recover_long: "Wieder auffüllen würde mehr als 3 Jahre Ihres heutigen Sparbetrags dauern."
+  job_population: "Lohnlücken: {prob} pro Jahr bei Leuten wie Ihnen, typisch {months} Monat(e)."
+  job_default: "Angestellte hatten in den Daten in 12 Monaten keine Lohnlücken; wir rechnen mit dem Schweizer Durchschnittsrisiko für Stellenverlust ({prob} pro Jahr)."
+  in_plan: "Jede Zukunft in Ihrem Plan enthält diese Rechnungen zu zufälligen Zeitpunkten."
+  breach: "In {n} von 10 Zukünften fällt Ihr Bargeld irgendwann unter einen Monat Ausgaben."
+  breach_rare: "In weniger als 1 von 10 Zukünften fällt Ihr Bargeld unter einen Monat Ausgaben."
+  segment: "{who} von {band} Jahren"
+  everyone: "alle in den Daten"
+  who: {employed: Angestellte, self_employed: Selbständige, retired: Pensionierte, student: Studierende, other: Personen}
+  cause_names: {}
+
 sources:
+  population: "Bankdaten: Leute wie Sie"
   transactions: "Aus Ihrem Konto"
   client_data: "Aus Bankdaten"
   user: "Von Ihnen gesetzt"
@@ -75,6 +96,9 @@ sources:
   llm_estimate: "KI-Schätzung, bitte prüfen"
 
 ui:
+  risk_rate: "Grosse Rechnungen pro Jahr"
+  risk_bad_year: "Schlechtes Jahr (1 von 10)"
+  risk_cushion: "Ihr Bargeld deckt das"
   money_goes: "Wohin Ihr Geld fliesst"
   opaque_hint: "Schraffiert: Bargeld, TWINT und Kreditkarte, die wir nicht sehen."
   fcf_label: "Bleibt pro Monat"

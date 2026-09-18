@@ -1,8 +1,8 @@
 """Monthly Monte Carlo over a household balance sheet.
 
 State per path: cash (liquid), invested, pillar 3a, pillar 2. Stochastic: inflation, asset returns,
-home prices, job loss (with unemployment benefits), variable spending noise, plus whatever
-distributions the levers carry. Vectorised over paths, looped over months: readable and ~20-60 ms.
+home prices, job loss (with unemployment benefits), variable spending noise, one-off bills (when the population
+data calibrates them), plus whatever distributions the levers carry. Vectorised over paths, looped over months: readable and ~20-60 ms.
 """
 from __future__ import annotations
 
@@ -92,6 +92,9 @@ def simulate(base: Baseline, impacts: list[LeverImpact], market: Market, T: int,
     # fixed costs follow prices; variable spending follows wages (people spend more as they earn more)
     spending = base.fixed_costs_monthly * price \
         + base.variable_costs_monthly * np.exp(noise_sd * rb.z_expense - 0.5 * noise_sd**2) * wage
+    if market.bill_rate > 0:   # at most one bill a month, with the right mean: P = rate / 12
+        hit = rb.u_bill < min(market.bill_rate / 12, 1.0)
+        spending = spending + hit * np.exp(market.bill_mu + market.bill_sigma * rb.z_bill) * price
     c3 = (base.contrib_p3a_monthly + (to_p3a if to_p3a is not None else 0.0)) * price
     ci = (base.contrib_invested_monthly + (to_inv if to_inv is not None else 0.0)) * price
     c2 = (to_p2 * price) if to_p2 is not None else np.zeros((T, N))

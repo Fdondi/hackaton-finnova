@@ -9,7 +9,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-Source = Literal["transactions", "client_data", "user", "market_default", "llm_estimate"]
+Source = Literal["transactions", "client_data", "user", "market_default", "llm_estimate", "population"]
 
 
 class Assumption(BaseModel):

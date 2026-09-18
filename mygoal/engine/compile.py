@@ -106,6 +106,18 @@ def compile_impacts(impacts: list[LeverImpact], start: date, T: int, N: int, see
                     c.flow_nominal[t] += vals
                 else:
                     bucket(c.one_off, o.bucket)[t] += vals
+        for ev in lever.contingent:
+            k += 1
+            rng = stream(seed, lever.lever_id, k)
+            when = np.rint(ev.timing.sample(rng, N)).astype(int)
+            vals = ev.amount.sample(rng, N)
+            paths = np.where((when >= 0) & (when < T))[0]
+            if ev.indexed:
+                bucket(c.one_off, ev.bucket)[when[paths], paths] += vals[paths]
+            elif ev.bucket == "cash":
+                c.flow_nominal[when[paths], paths] += vals[paths]
+            else:
+                bucket(c.one_off, ev.bucket)[when[paths], paths] += vals[paths]
         for w in lever.withdrawals:
             k += 1
             t = months_between(start, w.at)

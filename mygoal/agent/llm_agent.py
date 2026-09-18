@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from ..llm import LLMClient, ToolCall
 from .session import Session, WhatIfQuestion, WhatIfResult, WhatIfStep
-from .tools import profile_summary, propose_lever, search_transactions, tool_specs
+from .tools import life_event_evidence, profile_summary, propose_lever, search_transactions, tool_specs
 
 if TYPE_CHECKING:
     from ..service import PlanningService
@@ -15,6 +15,8 @@ SYSTEM = """You help a bank client explore a "what if" for their financial plan.
 your job is to turn the client's idea into one lever built from primitives, with every number stated as a labelled estimate.
 
 - Ground estimates in the client's data first: get_profile_summary, search_transactions.
+- For life events (baby, wedding, separation, new job, moving, inheritance) call life_event_evidence and build on what \
+happened to real people in the bank's data (source "population"); say how many people the numbers come from.
 - Ask the client only for facts you can't reasonably estimate (e.g. what something could sell for), at most {max_questions} questions.
 - Build the lever with propose_lever. Combine primitives when needed (selling a hobby = asset_dispose for the sale + \
 recurring_change for spending that stops). Amounts from bookings use source "transactions", the client's answers "user", \
@@ -33,6 +35,12 @@ def _summary(call: ToolCall, result: str) -> str:
             pass
     if call.name == "propose_lever":
         return f"built lever '{call.input.get('title')}'"
+    if call.name == "life_event_evidence":
+        try:
+            r = json.loads(result)
+            return f"bank data on '{r['event']}': " + (f"{r['people']} people" if r.get("available") else "none")
+        except (ValueError, KeyError):
+            pass
     return call.name.replace("_", " ")
 
 
@@ -67,6 +75,8 @@ class LLMAgent:
                 return json.dumps(search_transactions(self.svc, s.client_id, str(call.input.get("query", ""))), default=str), False
             if call.name == "propose_lever":
                 return propose_lever(self.svc, s, call.input, created_by="llm")
+            if call.name == "life_event_evidence":
+                return json.dumps(life_event_evidence(self.svc, str(call.input.get("event", ""))), default=str), False
             return f"Unknown tool {call.name}", True
         except Exception as exc:
             return f"Tool failed: {exc}", True

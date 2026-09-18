@@ -62,6 +62,7 @@ def build_profile(ds: Dataset, cfg: Config, overrides: dict[str, float] | None =
         Categoriser().categorise(ds)
     book = AssumptionBook(overrides)
     notes: list[DataNote] = [DataNote(level="warning", message=w) for w in ds.client.extra.get("adapter_warnings", [])]
+    notes += [DataNote(level="info", message=m) for m in ds.client.extra.get("adapter_notes", [])]
     as_of = ds.as_of
     age = as_of.year - ds.client.birth_year if ds.client.birth_year else None
 

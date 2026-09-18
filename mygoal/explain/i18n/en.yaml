@@ -67,7 +67,29 @@ groups:
 
 effort: {none: "No effort", low: "Low effort", medium: "Some effort", high: "Big change"}
 confidence: {structural: "Solid", behavioural: "Depends on habits", estimated: "Estimate"}
+risk:
+  title: "Surprise bills: people like you"
+  bills: "People like you ({segment}, {n} in the bank's data) get about {rate} bills over {threshold} a year, typically {p50}."
+  causes: "Most often: {causes}."
+  yours: "You had {n} in the last 12 months, so we plan with {rate} a year."
+  bad_year: "In a bad year (1 in 10) they add up to {amount}."
+  cushion: "Your cash covers that {times}×."
+  cushion_short: "That's more than your cash cushion of {liquid}."
+  recover: "Refilling it takes about {months} months of what you save."
+  recover_long: "Refilling it would take more than 3 years of what you save today."
+  job_population: "Salary gaps: {prob} a year for people like you, typically {months} month(s)."
+  job_default: "Employees in the data had no salary gaps in 12 months, so we keep the Swiss average job-loss risk ({prob} a year)."
+  in_plan: "Every future in your plan includes these bills at random times."
+  breach: "In {n} of 10 futures your cash dips below one month of spending at some point."
+  breach_rare: "In fewer than 1 of 10 futures does your cash dip below one month of spending."
+  segment: "{who} aged {band}"
+  everyone: "everyone in the data"
+  who: {employed: employed people, self_employed: self-employed people, retired: retirees, student: students, other: people}
+  cause_names: {Rechtsberatung: legal advice, Tierarzt: vet, Waschmaschine/Reparatur: appliance repair, Autogarage: car repair,
+                Umzugskosten: moving, Zahnarzt-Notfall: dental emergency, Spezialist: medical specialist}
+
 sources:
+  population: "Bank data: people like you"
   transactions: "From your account"
   client_data: "From bank records"
   user: "You set this"
@@ -75,6 +97,9 @@ sources:
   llm_estimate: "AI estimate, please check"
 
 ui:
+  risk_rate: "Big bills a year"
+  risk_bad_year: "Bad year (1 in 10)"
+  risk_cushion: "Your cash covers it"
   money_goes: "Where your money goes"
   opaque_hint: "Hatched: cash, TWINT and card bills we can't see into."
   fcf_label: "Left each month"

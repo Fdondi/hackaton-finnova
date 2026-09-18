@@ -13,8 +13,8 @@ from typing import Callable, Literal
 from pydantic import BaseModel, Field
 
 from ..model import (
-    AllocationDelta, AssumptionBook, GoalChange, IncomeDelta, LeverImpact, OneOff, RecurringDelta, Shock,
-    add_months, fixed, triangular,
+    AllocationDelta, AssumptionBook, ContingentOneOff, GoalChange, IncomeDelta, LeverImpact, OneOff, RecurringDelta, Shock,
+    add_months, fixed, lognormal, triangular,
 )
 from ..model.assumptions import Source
 from ..registry import Registry
@@ -84,6 +84,18 @@ class IncomeChange(Base):
 class OneOffPrimitive(Base):
     amount: Estimate = Field(description="CHF; negative for a cost, positive for money received")
     in_months: int = 0
+
+
+class ContingentWindfall(Base):
+    """A one-off cash inflow at an uncertain future date: inheritance, business sale, litigation payout,
+    deferred bonus. Estimate `expected_in_months` from context (e.g. actuarial life expectancy tables for
+    an elderly relative's age and sex) rather than asking the client for a specific date or year — only ask
+    for the amount if it isn't otherwise known."""
+    amount: Estimate = Field(description="CHF received when the event happens")
+    expected_in_months: Estimate = Field(description="Median time until the event, in months from today "
+                                          "(unit='months'); derive from context, don't ask the client for a date")
+    timing_uncertainty: float = Field(0.5, description="0 = happens almost exactly on schedule, "
+                                       "1 = could plausibly happen much earlier or much later")
 
 
 class ShockPrimitive(Base):
@@ -204,6 +216,19 @@ def one_off(p: OneOffPrimitive, ctx: LeverContext, lever_id: str, book: Assumpti
                    one_offs=[OneOff(at=add_months(ctx.start, p.in_months), amount=p.amount.dist(v), label=p.title)])
 
 
+@primitive("contingent_windfall", ContingentWindfall,
+           "A one-off cash inflow whose timing is uncertain, not just its size (inheritance, business exit, "
+           "deferred payout). Model the timing as a probability distribution derived from context — e.g. actuarial "
+           "life expectancy for an elderly relative's estate — instead of asking the client to name a year.")
+def contingent_windfall(p: ContingentWindfall, ctx: LeverContext, lever_id: str, book: AssumptionBook) -> LeverImpact:
+    amount = p.amount.read(book, "amount")
+    months = p.expected_in_months.read(book, "expected_in_months")
+    sigma = max(0.05, p.timing_uncertainty)
+    return _impact(p, lever_id, book, confidence="estimated",
+                   contingent=[ContingentOneOff(amount=p.amount.dist(amount), timing=lognormal(max(months, 0.5), sigma),
+                                                label=p.title)])
+
+
 @primitive("shock", ShockPrimitive, "A risk: something costly that may happen each year (repair, health, damage).")
 def shock(p: ShockPrimitive, ctx: LeverContext, lever_id: str, book: AssumptionBook) -> LeverImpact:
     prob = p.annual_probability.read(book, "annual_probability")
@@ -257,7 +282,8 @@ def combine(lever_id: str, title: str, parts: list[LeverImpact], **kw) -> LeverI
     merged = LeverImpact(lever_id=lever_id, title=title, **kw)
     seen: set[str] = set()
     for p in parts:
-        for f in ("one_offs", "recurring", "shocks", "income_changes", "allocation_changes", "withdrawals", "goal_changes", "side_effects"):
+        for f in ("one_offs", "contingent", "recurring", "shocks", "income_changes", "allocation_changes", "withdrawals",
+                  "goal_changes", "side_effects"):
             getattr(merged, f).extend(getattr(p, f))
         for a in p.assumptions:
             if a.key not in seen:

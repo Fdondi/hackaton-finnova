@@ -85,6 +85,40 @@ def profile_summary(svc: "PlanningService", client_id: str, goal_id: str) -> dic
     }
 
 
+LIFE_EVENTS = {"birth": "have_child", "marriage": "wedding", "divorce": "separation", "job_change": "job_change",
+               "migration": None, "income": None}
+EVENT_ALIASES = {"baby": "birth", "child": "birth", "wedding": "marriage", "separation": "divorce", "new_job": "job_change",
+                 "job": "job_change", "moving": "migration", "move": "migration", "inheritance": "income"}
+
+
+def life_event_evidence(svc: "PlanningService", event: str) -> dict[str, Any]:
+    """What happened to people in the bank's population data after a life event (see mygoal/population.py)."""
+    pop = svc.services.get("population")
+    name = EVENT_ALIASES.get(event, event)
+    ev = pop.life_event(name) if pop is not None else None
+    if ev is None:
+        return {"event": name, "available": False,
+                "note": "No population evidence for this event: use the client's data or labelled estimates."}
+    c = ev.get("event_costs") or {}
+    out = {
+        "event": name, "available": True, "people": ev["n"],
+        "monthly_spending_change": {k: ev["d_spend"][k] for k in ("median", "iqr", "ci90")},
+        "monthly_salary_change": {k: ev["d_salary"][k] for k in ("median", "iqr", "ci90")},
+        "costs_around_the_event": {"share_of_events_with_costs": c.get("share_with_costs"), "median_if_any": c.get("median_if_any"),
+                                   "iqr_if_any": c.get("iqr_if_any"),
+                                   "typical_items": [v["vendor"] for v in c.get("top_vendors", [])][:3]},
+        "categories_that_moved": ev.get("categories", []),
+        "method": "per person, 4 months after vs 4 months before the event, adjusted for seasonality (CHF/month)",
+        "ready_made_lever": LIFE_EVENTS.get(name),
+        "source_label": "population",
+    }
+    if name == "job_change" and ev.get("income_ratio"):
+        r = ev["income_ratio"]
+        out["salary_after_job_change"] = {k: r[k] for k in ("n", "median_change_pct", "share_cut", "cut_median_pct",
+                                                            "p10_change_pct", "p90_change_pct")}
+    return out
+
+
 def primitive_catalogue() -> str:
     """Compact description of every primitive's parameters, for the LLM tool description."""
     lines = []
@@ -99,7 +133,8 @@ def primitive_catalogue() -> str:
             fields.append(f"    {fname}: {typ}{'' if f.is_required() else ' (optional)'}{desc}")
         lines.append(f"- {name}: {d.description}\n" + "\n".join(fields))
     return ("Estimate = {value: number, low?: number, high?: number, label: string, unit?: string, "
-            "source: transactions|user|market_default|llm_estimate}. Guesses need source llm_estimate with low and high.\n"
+            "source: transactions|user|market_default|llm_estimate|population}. Guesses need source llm_estimate with low and high; "
+            "numbers from life_event_evidence use source population.\n"
             + "\n".join(lines))
 
 
@@ -111,6 +146,12 @@ def tool_specs(max_questions: int) -> list[ToolSpec]:
                  "Search the client's bookings by keywords (merchant names, themes like 'boat' or 'warhammer'; German and English). "
                  "Returns merchants with counts, totals, last-12-month sums and cadence.",
                  {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}),
+        ToolSpec("life_event_evidence",
+                 "What actually happened to people in the bank's data after a life event: how many people, the change in "
+                 "monthly spending and salary, typical one-off costs (e.g. wedding, lawyers, hospital). Events: birth, "
+                 "marriage, divorce, job_change, migration (moving canton), income (inheritance).",
+                 {"type": "object", "properties": {"event": {"type": "string", "enum": [*LIFE_EVENTS, *EVENT_ALIASES]}},
+                  "required": ["event"]}),
         ToolSpec("ask_user", f"Ask the client one short question (at most {max_questions} per what-if). Prefer numbers with a unit.",
                  {"type": "object", "properties": {
                      "question": {"type": "string"}, "kind": {"type": "string", "enum": ["number", "choice", "text"]},

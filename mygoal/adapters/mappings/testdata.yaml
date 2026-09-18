@@ -1,0 +1,50 @@
+# The organisers' testdata -> canonical model (used by adapters/testdata.py). Keys are the data's own values.
+# Order per booking: event type -> one-off vendor keywords -> booking category -> merchant/MCC rules -> fallback.
+accounts:                 # account kind -> AccountType; kinds not listed are skipped
+  checking: private
+  savings: savings
+  credit_card: card
+  pillar3a: 3a
+  investment: securities
+
+event_types:              # the event behind the booking is the most precise signal
+  salary: income_salary   # retirees: pension_category below
+  rent: housing
+  mortgage_payment: housing
+  savings_transfer: internal_transfer
+  pillar3a: savings_3a
+  pillar3a_withdrawal: internal_transfer
+  investment_contribution: investments
+  savings_adjustment: internal_transfer      # "Eigenkapital Immobilienkauf": savings moved into a property
+  income: windfall                           # inheritances, gifts: one-off, not monthly income
+pension_category: income_other               # "salary" of retired clients is their pension (no job-loss risk)
+
+one_off_keywords:         # once-in-a-lifetime costs: kept out of monthly averages (category life_event_costs)
+  [hochzeit, scheidung, vermögensteilung, anwaltskosten, anwalt, umzug, zügel, mietkaution, geburt]
+
+categories:               # the data's purchase categories that map 1:1
+  food: groceries
+  restaurants: restaurants
+  communication: utilities
+  education: education
+  health: health_costs
+  recreation: leisure_hobby
+  clothing: shopping
+
+fallback:                 # ambiguous: merchant/MCC rules decide first, this is the last resort for outflows
+  transport: transport_car
+  other: shopping
+
+tags_by_mcc:              # tags the car specialist and the what-if search rely on
+  "5541": [car, fuel]
+  "5542": [car, fuel]
+  "7523": [car, parking]
+
+counterparty:             # display text for bookings without a vendor
+  salary: Lohn / Salary
+  rent: Miete / Rent
+  mortgage_payment: Hypothek / Mortgage
+  savings_transfer: Übertrag Sparkonto / Savings transfer
+  pillar3a: Einzahlung Säule 3a
+  pillar3a_withdrawal: Bezug Säule 3a
+  investment_contribution: Anlagekonto / Investment account

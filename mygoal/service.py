@@ -114,6 +114,7 @@ class ClientState:
     goals: list[GoalSpec]
     custom_levers: dict[str, CustomLever] = field(default_factory=dict)
     version: int = 0
+    risk: Any = None                       # population.RiskProfile when the bank's population data is available
 
 
 def _h(obj: Any) -> str:
@@ -138,7 +139,9 @@ class PlanningService:
         if client_id not in self.clients:
             ds = self.source.load(client_id)
             profile = build_profile(ds, self.cfg)
-            self.clients[client_id] = ClientState(ds=ds, profile=profile, goals=list(ds.client.goals))
+            pop = self.services.get("population")
+            risk = pop.risk_for(ds, profile) if pop is not None else None
+            self.clients[client_id] = ClientState(ds=ds, profile=profile, goals=list(ds.client.goals), risk=risk)
         return self.clients[client_id]
 
     def upsert_goal(self, client_id: str, goal: GoalSpec) -> list[GoalSpec]:
@@ -177,8 +180,8 @@ class PlanningService:
     def baseline(self, client_id: str, global_overrides: dict[str, float] | None = None):
         st = self.state(client_id)
         book = AssumptionBook(global_overrides)
-        base = build_baseline(st.profile, st.ds.client, self.cfg, book)
-        market = build_market(self.cfg, book)
+        base = build_baseline(st.profile, st.ds.client, self.cfg, book, risk=st.risk)
+        market = build_market(self.cfg, book, risk=st.risk)
         return base, market, book.list()
 
     def planner(self, client_id: str, goal: GoalSpec, global_overrides: dict | None, n_paths: int | None = None) -> Planner:
@@ -482,10 +485,11 @@ class PlanningService:
         p = st.profile
         tax = load_taxonomy()
         base, market, _ = self.baseline(client_id)
-        goals = []
+        goals, breach = [], None
         for g in st.goals:
             pl = self.planner(client_id, g, {}, None)
             o = pl.outcome([])
+            breach = o.p_buffer_breach if breach is None else breach
             goals.append({**g.model_dump(mode="json"), "status": {
                 "p_success": o.p_success, "futures_of_10": o.futures_of_10, "p50": o.achieved.p50,
                 "target_date": o.target_date,
@@ -519,7 +523,47 @@ class PlanningService:
             "goal_types": sorted(GOALS),
             "data_quality": [n.model_dump() for n in p.data_quality],
             "recurring": [r.model_dump() for r in p.recurring if r.active],
+            "risk": self.risk_view(client_id, breach, market.job_loss_prob, lang),
         }
+
+    def risk_view(self, client_id: str, breach: float | None, job_prob: float, lang: str = "en") -> dict[str, Any] | None:
+        """Surprise bills and income risk measured on people like this client (population data), in plain words."""
+        st = self.state(client_id)
+        r, p = st.risk, st.profile
+        if r is None:
+            return None
+        rs = strings(lang).get("risk", {})
+        names = rs.get("cause_names") or {}
+        causes = [names.get(c["vendor"], c["vendor"]) for c in r.top_causes]
+        if r.segment == "all":
+            segment = rs.get("everyone", "everyone in the data")
+        else:
+            band, emp = r.segment.split("|")
+            segment = t("risk.segment", lang, who=(rs.get("who") or {}).get(emp, emp), band=band.replace("-", "–"))
+        bad_year = r.year_total(0.9)
+        monthly_saving = max(p.free_cash_flow_monthly, 0.0)          # same figure as the "left each month" tile
+        cushion = max(p.balances.liquid, 0.0)
+        refill = bad_year / monthly_saving if monthly_saving > 0 else None
+        texts = [
+            t("risk.bills", lang, segment=segment, n=f"{r.n_people:,}".replace(",", "'"), rate=f"{r.segment_rate:.1f}",
+              threshold=chf(r.bill_threshold), p50=chf(r.bill_p50 or 0)),
+            t("risk.causes", lang, causes=", ".join(causes)),
+            t("risk.yours", lang, n=r.personal_bills, rate=f"{r.bill_rate:.1f}"),
+            t("risk.bad_year", lang, amount=chf(bad_year)),
+            t("risk.cushion", lang, times=f"{cushion / bad_year:.0f}") if bad_year and cushion >= bad_year
+            else t("risk.cushion_short", lang, liquid=chf(cushion)),
+            t("risk.recover", lang, months=f"{refill:.0f}") if refill is not None and refill <= 36 else t("risk.recover_long", lang),
+            t("risk.job_population" if r.salary_gap_prob is not None else "risk.job_default", lang,
+              prob=f"{job_prob:.1%}", months=f"{r.salary_gap_months or 0:.0f}"),
+            t("risk.in_plan", lang) + " " + (t("risk.breach", lang, n=round(breach * 10)) if breach and breach >= 0.05
+                                             else t("risk.breach_rare", lang)),
+        ]
+        return {"segment": r.segment, "segment_label": segment, "n_people": r.n_people, "bill_rate": r.bill_rate,
+                "bill_threshold": r.bill_threshold, "bill_p50": r.bill_p50, "bill_p90": r.bill_p90, "bad_year": round(bad_year),
+                "personal_bills": r.personal_bills, "causes": causes, "cushion": round(cushion),
+                "cushion_times": round(cushion / bad_year, 1) if bad_year else None, "p_breach": breach,
+                "job_prob": job_prob, "job_source": "population" if r.salary_gap_prob is not None else "market_default",
+                "texts": texts}
 
     def i18n(self, lang: str) -> dict:
         return strings(lang)

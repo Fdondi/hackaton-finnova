@@ -10,8 +10,8 @@ services:
       OPENAI_REASONING_EFFORT: ${OPENAI_REASONING_EFFORT:-none}                  # "" for non-reasoning models
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-http://host.docker.internal:1234/v1}   # local model (LM Studio, vLLM)
       OPENAI_MODEL: ${OPENAI_MODEL:-local-model}
-      MYGOAL_DATA_SOURCE: ${MYGOAL_DATA_SOURCE:-synthetic}
-      MYGOAL_DATA_DIR: ${MYGOAL_DATA_DIR:-/app/data/synthetic}
+      MYGOAL_DATA_SOURCE: ${MYGOAL_DATA_SOURCE:-testdata}
+      MYGOAL_DATA_DIR: ${MYGOAL_DATA_DIR:-/app/data/testdata}
     extra_hosts: ["host.docker.internal:host-gateway"]
     volumes:                                           # swap data or config without rebuilding
       - ./data:/app/data:ro
