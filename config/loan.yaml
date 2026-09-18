@@ -1,0 +1,11 @@
+# Swiss unsecured consumer loans (Konsumkreditgesetz). Not a mortgage. (verify)
+# The engine never takes a loan unless the client switches the finance action on.
+unsecured_base: 0.069          # typical advertised rate when creditworthiness is mid
+unsecured_min: 0.049           # best advertised cash-loan rates
+unsecured_max: 0.110           # KKG cap (cash loans); we never suggest above this
+rate_spread: 0.060             # how far a strong vs stretched score moves the rate from base
+term_months_default: 48
+term_months_min: 12
+term_months_max: 84
+min_principal: 3000
+max_principal: 80000           # typical KKG cash-loan ceiling (verify)

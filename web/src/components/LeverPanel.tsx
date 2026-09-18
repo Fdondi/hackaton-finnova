@@ -1,7 +1,7 @@
 import { ChevronDown, CircleHelp, Star, Trash2, Wand2 } from 'lucide-react'
 import { useState } from 'react'
 import type { LeverCard, PlanResponse } from '../api'
-import { chf } from '../format'
+import { chf, onceAmount } from '../format'
 import { useT } from '../i18n'
 import { Button, Card, LeverIcon, Pill, Toggle } from './ui'
 
@@ -24,10 +24,14 @@ function LeverRow({ lv, onToggle, onWhy, onRemove }: { lv: LeverCard; onToggle: 
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             {lv.impact_label && <Pill tone={tone}>{lv.impact_label}</Pill>}
             {lv.monthly_equivalent !== 0 && <span className="text-xs text-ink-2 tabular">{lv.monthly_equivalent > 0 ? '+' : ''}{chf(lv.monthly_equivalent)}/{t('ui.month_short', {}, 'mo')}</span>}
+            {onceAmount(lv.details) !== 0 && <span className="text-xs text-ink-2 tabular">{chf(onceAmount(lv.details))} {t('flow.once_short', {}, 'once')}</span>}
             <Pill>{t(`effort.${lv.effort}`)}</Pill>
             <Pill tone={lv.confidence === 'estimated' ? 'llm' : 'neutral'}>{t(`confidence.${lv.confidence}`)}</Pill>
             {lv.in_plan && <Pill tone="accent"><Star size={11} aria-hidden />{t('ui.in_plan')}</Pill>}
             {lv.trade_off && <Pill tone="bad">{t('ui.trade_off')}</Pill>}
+            {Boolean((lv.details as { needs_agreement?: boolean }).needs_agreement) && (
+              <Pill tone="warning">{t('flow.needs_agreement', {}, 'Needs your agreement')}</Pill>
+            )}
           </div>
           {lv.side_effects[0] && <p className="mt-1.5 text-xs text-ink-2">{lv.side_effects[0]}</p>}
           <div className="mt-1 flex items-center gap-3">

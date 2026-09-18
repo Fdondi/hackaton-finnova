@@ -185,5 +185,22 @@ ui:
   in_plan: "In suggested plan"
   thinking: "Working on it…"
 
+flow:
+  more_ideas: "Ask for more ideas to save"
+  suggest_value: "Suggest a value"
+  suggest_unavailable: "No suggestion available (AI is off)."
+  how_monthly: "How we get to the monthly figure"
+  monthly_over: "Averaged over {months} months until the goal."
+  monthly_is_income: "The monthly figure is the ongoing income or cost. A purchase is paid once, like a goal."
+  once_heading: "Paid once"
+  once_short: "once"
+  monthly_total: "Counted as"
+  purchase_event: "Purchase / investment"
+  loan_event: "Loan"
+  debt: "Debt"
+  needs_agreement: "Needs your agreement"
+  rate_from: "Where the suggested interest rate comes from"
+  gain_hint: "How much this helps this goal, compared with the other actions. Never changes when you switch actions on or off."
+
 actions:
   move: "Move “{label}” to {year}"

@@ -25,6 +25,7 @@ from .explain import DriverInput, chf, month, strings, t, top_drivers
 from .explain.translate import tr, tr_unit
 from .goals import GOALS, parse_params, target_date
 from .levers import LeverContext, build_levers, build_primitive, combine
+from .levers.loan import companions, select_active
 from .model import Assumption, AssumptionBook, Dataset, GoalSpec, LeverImpact, months_between
 from .profile import Profile, build_profile
 from .registry import load_plugins
@@ -168,6 +169,8 @@ class PlanningService:
         GOALS.get(goal.type)  # validates the type
         parse_params(GOALS.get(goal.type), goal)
         with st.goals_lock:
+            if goal.type == "retirement":     # only one retirement goal, suggested or confirmed
+                st.goals = [g for g in st.goals if g.type != "retirement" or g.id == goal.id]
             ids = [g.id for g in st.goals]
             st.goals = [goal if g.id == goal.id else g for g in st.goals] if goal.id in ids else [*st.goals, goal]
             st.version += 1
@@ -235,6 +238,7 @@ class PlanningService:
                 out.append(self.build_custom(cl, ctx))
             except Exception as exc:  # a broken agent lever must not break the page
                 st.ds.client.extra.setdefault("lever_errors", []).append(f"{cl.lever_id}: {exc}")
+        out.extend(companions(ctx, out))
         return out
 
     @staticmethod
@@ -268,7 +272,7 @@ class PlanningService:
         _, _, global_assumptions = self.baseline(client_id, glob)
         all_levers = self.levers(client_id, goal, base, req.overrides)
         by_id = {lv.lever_id: lv for lv in all_levers}
-        active = [by_id[i] for i in req.active if i in by_id]
+        active = select_active(by_id, req.active)
         options = [lv for lv in all_levers if lv.group != "life_event"]
         tick("setup")
 
@@ -279,10 +283,12 @@ class PlanningService:
         planning = self.cfg["app"]["planning"]
         rank_key = _h([client_id, goal.model_dump(), req.overrides, st.version, req.n_paths])
         if rank_key not in self._rankings:
-            scores = pl.rank(options)
+            rankable = [lv for lv in options if lv.details.get("finances") in (None, "goal")]
+            scores = pl.rank(rankable)
             excluded_groups = set(planning.get("auto_plan_excluded_groups", []))
             excluded = set(planning.get("auto_plan_excluded_levers", []))
-            candidates = [lv for lv in options if lv.group not in excluded_groups and lv.lever_id not in excluded]
+            candidates = [lv for lv in rankable if lv.group not in excluded_groups and lv.lever_id not in excluded
+                          and not lv.details.get("needs_agreement")]
             plan_ids = pl.auto_plan(candidates, planning["effort_weight"],
                                     weight_multiplier=planning.get("auto_plan_weight_multiplier"))
             self._rankings[rank_key] = (scores, plan_ids)
@@ -304,8 +310,10 @@ class PlanningService:
         cross = self.cross_goal(client_id, goal, active, scenario, glob, lang, req.n_paths) if req.include_cross_goal else []
         tick("cross_goal")
 
+        trade_offs = set(planning.get("auto_plan_excluded_levers", [])) | {
+            lv.lever_id for lv in all_levers if lv.details.get("needs_agreement")}
         cards = self.cards(all_levers, scores, set(req.active), set(plan_ids), lang,
-                           set(planning.get("auto_plan_excluded_levers", [])))
+                           trade_offs, base, months_between(base.start, baseline.target_date))
         drivers = [d.text for d in top_drivers(DriverInput(goal=apply_goal_changes(goal, active), outcome=scenario, profile=st.profile,
                                                             base=base, lang=lang))]
         texts = self.goal_texts(goal, baseline, scenario, gap_baseline, gap_scenario, deadline, plan_levers, lang,
@@ -372,17 +380,28 @@ class PlanningService:
         return [g.model_copy(update={"label": self.goal_label(g, lang), "note": self.goal_note(g, lang)})
                 for g in self.state(client_id).goals]
 
+    @staticmethod
+    def explain(lv: LeverImpact, base: Baseline | None, months: int | None) -> dict:
+        """Details plus "how we get to the monthly figure" (parts adding up to it, and the lever's notes)."""
+        if base is None or months is None or months <= 0:
+            return dict(lv.details)
+        from .engine.solve import breakdown
+        b = breakdown(lv, base.start, months, base.salary_net_monthly)
+        if lv.headline_monthly is not None:           # levers that state their own figure: keep only their notes
+            b = {**b, "lines": [x for x in b.get("lines", []) if x.get("kind") == "once"], "total": round(lv.headline_monthly, 2)}
+        return {**lv.details, "breakdown": b}
+
     def cards(self, levers: list[LeverImpact], scores, active: set[str], plan: set[str], lang: str,
-              trade_offs: set[str]) -> list[LeverCard]:
+              trade_offs: set[str], base: Baseline | None = None, horizon: int | None = None) -> list[LeverCard]:
         score_by = {s.lever_id: (i, s) for i, s in enumerate(scores)}
         cards = []
         for lv in levers:
             rank, s = score_by.get(lv.lever_id, (None, None))
-            months = s.months_gained if s else None
-            if months and months > 0:
-                label = t("lever.month_gained_one" if months == 1 else "lever.months_gained", lang, months=months)
-            elif months and months < 0:
-                label = t("lever.month_lost_one" if months == -1 else "lever.months_lost", lang, months=-months)
+            gained = s.months_gained if s else None
+            if gained and gained > 0:
+                label = t("lever.month_gained_one" if gained == 1 else "lever.months_gained", lang, months=gained)
+            elif gained and gained < 0:
+                label = t("lever.month_lost_one" if gained == -1 else "lever.months_lost", lang, months=-gained)
             elif s and s.delta_p > 0.005:
                 label = t("lever.more_futures", lang, n=round(100 * s.delta_p))
             else:
@@ -392,8 +411,8 @@ class PlanningService:
                 title=self.lever_title(lv, lang),
                 description=tr(lv.description, lang), group=lv.group, effort=lv.effort, confidence=lv.confidence,
                 side_effects=[tr(x, lang) for x in lv.side_effects], product_trigger=lv.product_trigger, icon=lv.icon, origin=lv.origin,
-                details=lv.details, assumptions=[self.view(a, lang) for a in lv.assumptions],
-                months_gained=months, delta_p=s.delta_p if s else 0.0,
+                details=self.explain(lv, base, horizon), assumptions=[self.view(a, lang) for a in lv.assumptions],
+                months_gained=gained, delta_p=s.delta_p if s else 0.0,
                 monthly_equivalent=s.monthly_equivalent if s else (lv.headline_monthly or 0.0),
                 impact_label=label, active=lv.lever_id in active, in_plan=lv.lever_id in plan,
                 helps=bool(s and ((s.months_gained or 0) > 0 or s.delta_p > 0.005)) if s else True,
@@ -516,8 +535,10 @@ class PlanningService:
         pl = self.planner(client_id, goal, overrides.get("global", {}))
         lever = next(lv for lv in self.levers(client_id, goal, pl.base, overrides) if lv.lever_id == lever_id)
         score = pl.rank([lever])[0]
+        months = months_between(pl.base.start, target_date(GOALS.get(goal.type), goal, pl.base))
         return {"lever_id": lever_id, "title": lever.title, "months_gained": score.months_gained, "delta_p": score.delta_p,
                 "p_success": score.p_success, "achieved_p50": score.achieved_p50, "monthly_equivalent": score.monthly_equivalent,
+                "how_the_monthly_figure_comes_about": self.explain(lever, pl.base, months).get("breakdown"),
                 "assumptions": [a.model_dump() for a in lever.assumptions]}
 
     # ---- overview ("where you stand") ----

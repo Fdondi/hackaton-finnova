@@ -29,6 +29,14 @@ export function formatValue(value: number, unit: string): string {
   return `${Number.isInteger(value) ? value.toLocaleString('en-US').replace(/,/g, '’') : value.toFixed(2)} ${unit}`
 }
 
+/** One-off cash of a lever (purchase/sale), from the breakdown. Not part of the monthly figure. */
+export function onceAmount(details: Record<string, unknown> | undefined): number {
+  const b = details?.breakdown as { once?: number; lines?: { kind: string; amount: number }[] } | undefined
+  if (!b) return 0
+  if (typeof b.once === 'number') return b.once
+  return (b.lines ?? []).filter((l) => l.kind === 'once').reduce((s, l) => s + l.amount, 0)
+}
+
 /** "+3y", "+1y 4m", "+5m", "on time". */
 export function delayLabel(months: number | null, t: (key: string, vars?: Record<string, string | number>, fallback?: string) => string): string {
   if (months === null) return t('flow.not_reached', {}, 'not reached')

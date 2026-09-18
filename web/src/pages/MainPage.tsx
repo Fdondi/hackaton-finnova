@@ -1,19 +1,19 @@
 import { CalendarClock, CircleCheck, Database, FileText, Gauge, House, LoaderCircle, Lock, Pencil, PiggyBank, Sparkles, Star, Target, Trash2, TreePalm, TriangleAlert, X } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { GoalSpec, LeverCard, Timeline, TimelineGoal } from '../api'
 import { GoalEditor } from '../components/GoalEditor'
 import { useTokens } from '../components/tokens'
 import { WhatIfBox } from '../components/WhatIfBox'
 import { Card, LeverIcon, Pill } from '../components/ui'
-import { chf, chfCompact, monthLabel } from '../format'
+import { chf, chfCompact, monthLabel, onceAmount } from '../format'
 import { useT } from '../i18n'
 
 const pct = (x: number) => `${Math.round(x * 100)}%`
 const ICON = { spend: Target, save: PiggyBank, retirement: TreePalm } as const
 const ts = (iso: string) => Date.parse(iso)
 
-interface Row { x: number; pension: number; locked: number; available: number; low: number }
+interface Row { x: number; pension: number; locked: number; available: number; low: number; debt: number }
 
 /** All goals on one timeline: spending goals take their money out, saving goals and pension money are locked.
  *  Only active actions are in it. Drops and locks are vertical: each goal date comes twice (before / after). */
@@ -22,14 +22,18 @@ function GoalsChart({ tl }: { tl: Timeline }) {
   const c = useTokens()
   const rows: Row[] = useMemo(() => tl.dates.map((d, i) => ({
     x: ts(d), pension: tl.pension[i], locked: tl.locked[i], available: Math.max(tl.free[i] - tl.locked[i], 0),
-    low: Math.max(tl.free_low[i] - tl.locked[i], 0),
+    low: Math.max(tl.free_low[i] - tl.locked[i], 0), debt: tl.debt?.[i] ?? 0,
   })), [tl])
   const first = new Date(tl.start).getFullYear(), last = new Date(tl.end).getFullYear()
   const step = Math.max(1, Math.ceil((last - first) / 9))
   const ticks = Array.from({ length: Math.floor((last - first) / step) + 1 }, (_, i) => Date.UTC(first + i * step, 0, 1))
   const risky = (g: TimelineGoal) => 1 - g.p > tl.alert_failure
   const violet = c['--series-violet'] || '#4a3aa7'
+  const blue = c['--series-1'] || '#2a78d6'
+  const debtColor = c['--series-2'] || '#eb6834'
   const inRange = tl.goals.filter((g) => g.date <= tl.end && g.type !== 'retirement')
+  const events = (tl.events ?? []).filter((e) => e.date <= tl.end)
+  const hasDebt = rows.some((r) => r.debt > 0)
   return (
     <div>
       <div className="h-72 w-full">
@@ -49,6 +53,7 @@ function GoalsChart({ tl }: { tl: Timeline }) {
                   {r.locked > 0 && <div className="tabular">{t('flow.locked_goals', {}, 'Set aside for goals')}: <b>{chf(r.locked)}</b></div>}
                   <div className="tabular">{t('flow.pension_locked', {}, 'Pension (locked)')}: <b>{chf(r.pension)}</b></div>
                   <div className="tabular text-ink-2">{t('flow.bad_case', {}, 'Bad case (1 in 10)')}: {chf(r.low)}</div>
+                  {r.debt > 0 && <div className="tabular">{t('flow.debt', {}, 'Debt')}: <b>{chf(r.debt)}</b></div>}
                 </div>
               )
             }} />
@@ -56,11 +61,18 @@ function GoalsChart({ tl }: { tl: Timeline }) {
             <Area dataKey="locked" stackId="w" type="linear" stroke="none" fill={violet} fillOpacity={0.45} isAnimationActive={false} />
             <Area dataKey="available" stackId="w" type="linear" stroke={c['--series-1']} strokeWidth={2} fill={c['--series-1']} fillOpacity={0.18} isAnimationActive={false} />
             <Line dataKey={(r: Row) => r.pension + r.locked + r.low} type="linear" stroke={c['--series-1']} strokeDasharray="3 4" strokeWidth={1} dot={false} isAnimationActive={false} />
+            {hasDebt && <Line dataKey="debt" type="linear" stroke={debtColor} strokeWidth={2} dot={false} isAnimationActive={false} />}
             {inRange.map((g, i) => (
               <ReferenceLine key={g.id} x={ts(g.date)} stroke={risky(g) ? c['--critical'] : c['--good']} strokeWidth={risky(g) ? 2 : 1.5}
                 strokeDasharray={risky(g) ? undefined : '4 3'}
                 label={{ value: `${risky(g) ? '⚠ ' : ''}${g.label.length > 22 ? g.label.slice(0, 21) + '…' : g.label}`, position: 'top',
                   offset: i % 2 ? 4 : 18, fill: risky(g) ? c['--critical'] : c['--ink-2'], fontSize: 11, fontWeight: risky(g) ? 700 : 400 }} />
+            ))}
+            {events.map((e, i) => (
+              <ReferenceLine key={`e-${e.date}-${e.label}`} x={ts(e.date)} stroke={e.kind === 'loan' ? debtColor : blue} strokeWidth={1.5}
+                strokeDasharray={e.kind === 'loan' ? '2 2' : undefined}
+                label={{ value: e.label.length > 22 ? e.label.slice(0, 21) + '…' : e.label, position: 'top',
+                  offset: (inRange.length + i) % 2 ? 4 : 18, fill: e.kind === 'loan' ? debtColor : blue, fontSize: 11 }} />
             ))}
           </ComposedChart>
         </ResponsiveContainer>
@@ -70,6 +82,9 @@ function GoalsChart({ tl }: { tl: Timeline }) {
         <span className="inline-flex items-center gap-1.5"><span className="h-3 w-4 rounded-sm" style={{ background: violet, opacity: 0.55 }} />{t('flow.locked_goals', {}, 'Set aside for goals')}</span>
         <span className="inline-flex items-center gap-1.5"><span className="h-3 w-4 rounded-sm bg-muted/40" />{t('flow.pension_locked', {}, 'Pension (locked)')}</span>
         <span className="inline-flex items-center gap-1.5"><span className="w-4 border-t border-dashed border-accent" />{t('flow.bad_case', {}, 'Bad case (1 in 10)')}</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-3 w-0.5 bg-[var(--series-1)]" />{t('flow.purchase_event', {}, 'Purchase / investment')}</span>
+        <span className="inline-flex items-center gap-1.5"><span className="w-4 border-t-2 border-[var(--series-2)]" />{t('flow.debt', {}, 'Debt')}</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-3 w-0.5 bg-[var(--series-2)]" />{t('flow.loan_event', {}, 'Loan')}</span>
         <span className="text-muted">{t('flow.active_only', {}, 'Includes the actions that are switched on.')}</span>
       </div>
     </div>
@@ -113,12 +128,19 @@ function GoalLine({ g, spec, tl, focused, onFocus, onSave, onDelete, onMoveLater
   )
 }
 
-function ActionRow({ lv, on, recommended, gain, onToggle, onDetails, onDelete }: {
-  lv: LeverCard; on: boolean; recommended: boolean; gain: number | undefined
+function dollars(gain: number, max: number) {
+  if (!(max > 0) || !(gain > 0)) return gain < -0.005 ? '−' : ''
+  const r = gain / max
+  return r > 0.7 ? '💵💵💵' : r > 0.3 ? '💵💵' : '💵'
+}
+
+function ActionRow({ lv, on, recommended, gain, maxGain, onToggle, onDetails, onDelete }: {
+  lv: LeverCard; on: boolean; recommended: boolean; gain: number | undefined; maxGain: number
   onToggle: (on: boolean) => void; onDetails: () => void; onDelete: () => void
 }) {
   const { t } = useT()
-  const style = on ? 'border-accent bg-accent-wash' : recommended ? 'border-good/60 bg-good/10' : 'border-line bg-surface'
+  const agree = Boolean((lv.details as { needs_agreement?: boolean }).needs_agreement)
+  const style = on ? 'border-accent bg-accent-wash' : recommended ? 'border-good/60 bg-good/10' : agree ? 'border-warning/70 bg-warning/10' : 'border-line bg-surface'
   return (
     <li className={`flex items-start gap-3 rounded-xl border p-2.5 transition ${style}`}>
       <input type="checkbox" checked={on} onChange={(e) => onToggle(e.target.checked)} className="mt-1.5 h-4 w-4 accent-[var(--series-1)]" aria-label={lv.title} />
@@ -127,16 +149,20 @@ function ActionRow({ lv, on, recommended, gain, onToggle, onDetails, onDelete }:
         <div className="text-sm font-medium leading-snug">{lv.title}</div>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
           {recommended && <Pill tone="good"><Star size={11} />{t('flow.recommended', {}, 'Recommended')}</Pill>}
+          {agree && <Pill tone="warning" title={lv.description}><TriangleAlert size={11} />{t('flow.needs_agreement', {}, 'Needs your agreement')}</Pill>}
           {lv.origin === 'agent' && <Pill tone="llm"><Sparkles size={11} />{t('flow.ai_idea', {}, 'AI idea')}</Pill>}
           {lv.monthly_equivalent !== 0 && <span className="text-xs text-ink-2 tabular">{lv.monthly_equivalent > 0 ? '+' : ''}{chf(lv.monthly_equivalent)}/{t('ui.month_short', {}, 'mo')}</span>}
+          {onceAmount(lv.details) !== 0 && <span className="text-xs text-ink-2 tabular">{chf(onceAmount(lv.details))} {t('flow.once_short', {}, 'once')}</span>}
           {lv.effort && <Pill>{t(`effort.${lv.effort}`)}</Pill>}
-          {lv.assumptions.length > 0 && <button onClick={onDetails} className="inline-flex items-center gap-1 text-xs text-accent hover:underline"><FileText size={12} />{t('flow.details', {}, 'Details')}</button>}
+          {(lv.assumptions.length > 0 || Boolean((lv.details as { breakdown?: unknown }).breakdown)) && (
+            <button onClick={onDetails} className="inline-flex items-center gap-1 text-xs text-accent hover:underline"><FileText size={12} />{t('flow.details', {}, 'Details')}</button>
+          )}
         </div>
       </div>
       {gain !== undefined && (
         <span className={`shrink-0 self-center rounded-lg px-2 py-1 text-sm font-semibold tabular ${gain > 0.005 ? 'bg-good/15 text-good-text' : gain < -0.005 ? 'bg-critical/10 text-critical' : 'bg-surface-2 text-ink-2'}`}
-          title={t('flow.gain_hint', {}, 'Change in the chance of reaching this goal')}>
-          {gain >= 0 ? '+' : '−'}{Math.abs(Math.round(gain * 100))} {t('flow.pts', {}, 'pts')}
+          title={t('flow.gain_hint', {}, 'How much this helps this goal, compared with the other actions. Never changes when you switch actions on or off.')}>
+          {dollars(gain, maxGain) || '·'}
         </span>
       )}
       <button onClick={onDelete} className="rounded p-1 text-muted hover:text-critical" aria-label={t('flow.delete', {}, 'Delete')} title={t('flow.delete', {}, 'Delete')}><Trash2 size={14} /></button>
@@ -144,17 +170,27 @@ function ActionRow({ lv, on, recommended, gain, onToggle, onDetails, onDelete }:
   )
 }
 
-/** Actions for the goal in focus: each with how many points it adds to that goal's chance, best first. */
-function ActionsCard({ tl, clientId, active, listed, ideasLoading, onToggle, onActivateAll, onDelete, onDetails, onLever }: {
+/** Actions for the goal in focus: each with a 💵 impact mark (scaled to the strongest action, frozen so it never moves). */
+function ActionsCard({ tl, clientId, active, listed, ideasLoading, onToggle, onActivateAll, onDelete, onDetails, onLever, onMoreIdeas }: {
   tl: Timeline; clientId: string; active: string[]; listed: string[]; ideasLoading: boolean
   onToggle: (id: string, on: boolean) => void; onActivateAll: (ids: string[]) => void; onDelete: (id: string) => void
-  onDetails: (id: string) => void; onLever: (id: string) => void
+  onDetails: (id: string) => void; onLever: (id: string) => void; onMoreIdeas: () => void
 }) {
   const { t, months } = useT()
   const a = tl.actions!
+  const frozen = useRef<Record<string, number>>({})
+  const goalRef = useRef(a.goal_id)
+  if (goalRef.current !== a.goal_id) {
+    frozen.current = {}
+    goalRef.current = a.goal_id
+  }
+  for (const [k, v] of Object.entries(a.gains)) {
+    if (!(k in frozen.current)) frozen.current[k] = v
+  }
   const ids = [...new Set([...a.recommended, ...listed, ...active])].filter((i) => tl.cards[i])
-  const gain = (i: string) => a.gains[i] ?? -1
+  const gain = (i: string) => frozen.current[i] ?? a.gains[i] ?? -1
   ids.sort((x, y) => gain(y) - gain(x))
+  const maxGain = Math.max(0, ...ids.map((i) => gain(i)))
   const open = a.recommended.filter((i) => !active.includes(i))
   const tone = a.p_to >= 1 - tl.alert_failure ? 'bg-good/15 text-good-text' : a.p_to >= tl.success_threshold ? 'bg-warning/20 text-ink' : 'bg-critical/10 text-critical'
   return (
@@ -169,8 +205,8 @@ function ActionsCard({ tl, clientId, active, listed, ideasLoading, onToggle, onA
       </div>
       <ul className="mt-3 space-y-2">
         {ids.map((i) => (
-          <ActionRow key={i} lv={tl.cards[i]} on={active.includes(i)} recommended={a.recommended.includes(i)} gain={a.gains[i]}
-            onToggle={(on) => onToggle(i, on)} onDetails={() => onDetails(i)} onDelete={() => onDelete(i)} />
+          <ActionRow key={i} lv={tl.cards[i]} on={active.includes(i)} recommended={a.recommended.includes(i)} gain={frozen.current[i] ?? a.gains[i]}
+            maxGain={maxGain} onToggle={(on) => onToggle(i, on)} onDetails={() => onDetails(i)} onDelete={() => onDelete(i)} />
         ))}
         {ideasLoading && (
           <li className="flex items-center gap-2 rounded-xl border border-dashed border-llm/40 p-2.5 text-sm text-llm">
@@ -178,6 +214,13 @@ function ActionsCard({ tl, clientId, active, listed, ideasLoading, onToggle, onA
           </li>
         )}
       </ul>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button type="button" onClick={onMoreIdeas} disabled={ideasLoading}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-llm/50 px-3 py-1.5 text-sm text-llm hover:bg-llm-wash disabled:opacity-50">
+          {ideasLoading ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />}
+          {t('flow.more_ideas', {}, 'Ask for more ideas to save')}
+        </button>
+      </div>
       <div className="mt-3"><WhatIfBox clientId={clientId} goalId={a.goal_id} onLever={onLever} /></div>
       <div className={`mt-3 rounded-lg px-3 py-2 text-sm font-medium ${tone}`}>
         {Math.abs(a.p_to - a.p_from) < 0.005
@@ -190,11 +233,12 @@ function ActionsCard({ tl, clientId, active, listed, ideasLoading, onToggle, onA
 
 /** Page 2: every goal on one timeline, and the actions for the first goal that fails. */
 export function MainPage({ clientId, tl, goals, active, listed, loading, ideasLoading, onToggle, onActivateAll, onDelete, onDetails, onLever,
-  onFocus, onSaveGoal, onDeleteGoal, onPro, onFacts, onGoals }: {
+  onFocus, onSaveGoal, onDeleteGoal, onPro, onFacts, onGoals, onMoreIdeas }: {
   clientId: string; tl: Timeline; goals: GoalSpec[]; active: string[]; listed: string[]; loading: boolean; ideasLoading: Record<string, boolean>
   onToggle: (id: string, on: boolean) => void; onActivateAll: (ids: string[]) => void; onDelete: (id: string) => void
   onDetails: (id: string) => void; onLever: (id: string) => void; onFocus: (goalId: string) => void
   onSaveGoal: (g: GoalSpec) => void; onDeleteGoal: (goalId: string) => void; onPro: () => void; onFacts: () => void; onGoals: () => void
+  onMoreIdeas: () => void
 }) {
   const { t } = useT()
   return (
@@ -216,7 +260,7 @@ export function MainPage({ clientId, tl, goals, active, listed, loading, ideasLo
 
       {tl.actions && (
         <ActionsCard tl={tl} clientId={clientId} active={active} listed={listed} ideasLoading={!!ideasLoading[tl.actions.goal_id]}
-          onToggle={onToggle} onActivateAll={onActivateAll} onDelete={onDelete} onDetails={onDetails} onLever={onLever} />
+          onToggle={onToggle} onActivateAll={onActivateAll} onDelete={onDelete} onDetails={onDetails} onLever={onLever} onMoreIdeas={onMoreIdeas} />
       )}
 
       <div className="flex justify-between pb-16">

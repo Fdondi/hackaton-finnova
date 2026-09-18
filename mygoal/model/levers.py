@@ -94,6 +94,16 @@ class Investment(BaseModel):
     label: str = ""
 
 
+class Debt(BaseModel):
+    """Remaining balance of an unsecured loan, for the chart. Cash flows live on one_offs/recurring."""
+    start: date
+    principal: float            # today's CHF at origination
+    annual_rate: float
+    term_months: int
+    indexed: bool = True        # principal in today's CHF, like the expense it finances
+    label: str = ""
+
+
 class Withdrawal(BaseModel):
     """State-dependent: take `amount` from buckets in `order`, respecting per-bucket caps (CHF)."""
     at: date
@@ -125,6 +135,7 @@ class LeverImpact(BaseModel):
     allocation_changes: list[AllocationDelta] = Field(default_factory=list)
     investments: list[Investment] = Field(default_factory=list)
     withdrawals: list[Withdrawal] = Field(default_factory=list)
+    debts: list[Debt] = Field(default_factory=list)
     goal_changes: list[GoalChange] = Field(default_factory=list)
     assumptions: list[Assumption] = Field(default_factory=list)
     side_effects: list[str] = Field(default_factory=list)
@@ -159,4 +170,6 @@ class LeverImpact(BaseModel):
             a.start, a.end = mv(a.start), mv(a.end)
         for w in c.withdrawals:
             w.at = mv(w.at)
+        for d in c.debts:
+            d.start = mv(d.start)
         return c

@@ -23,16 +23,27 @@ log = logging.getLogger("mygoal.agent")
 
 GOAL_TYPES = {"home": "buying a home (amount = property price)", "target": "any purchase or saving target (amount = total cost)",
               "retirement": "retiring at an age (retirement_age)"}
+CATEGORIES = ["home", "car", "travel", "education", "hobby", "collection", "business", "family", "safety", "health",
+              "retirement", "other"]
+_CATEGORY_HINTS = (("car", "car"), ("auto", "car"), ("house", "home"), ("home", "home"), ("wohnung", "home"),
+                   ("trip", "travel"), ("travel", "travel"), ("reise", "travel"), ("study", "education"),
+                   ("education", "education"), ("school", "education"), ("hobby", "hobby"), ("funko", "collection"),
+                   ("collection", "collection"), ("farm", "business"), ("business", "business"),
+                   ("cushion", "safety"), ("emergency", "safety"), ("health", "health"), ("retire", "retirement"))
 
 SUGGEST_SYSTEM = """You suggest financial life goals for one bank client, based on their situation. Output JSON only:
-{{"goals": [{{"type": "home|target|retirement", "label": "max 40 chars", "amount": CHF, "years": years from today,
-"kind": "spend|save", "retirement_age": only for retirement, "reason": "one short sentence that refers to their situation"}}]}}
-kind (target goals): "spend" if the money is paid out at the date (a car, a trip), "save" if it just has to be there
-(an emergency fund, an education fund).
-Suggest {n} goals that fit this person, concrete and personal: a teenager gets a games console, someone over 50 early
-retirement, a renter with savings a home, a wealthy car lover a sports car, parents an education fund. Amounts are rough
-typical Swiss prices (they will be shown as editable estimates). Don't repeat these existing goals: {existing}.
-Write label and reason in {language}. Goal types: {types}."""
+{{"goals": [{{"type": "home|target|retirement", "category": "{categories}", "label": "max 40 chars", "amount": CHF,
+"years": years from today, "kind": "spend|save", "retirement_age": only for retirement,
+"reason": "one short sentence that refers to their situation"}}]}}
+kind (target goals): "spend" if the money is paid out at the date, "save" if it just has to be set aside.
+Suggest {n} goals this particular person might really dream of. Be creative and specific, not generic: read their age,
+family, work, interests and the shops they pay (a Games Workshop customer might want a big Warhammer army, a hiker a
+Himalaya trek, a student a semester abroad, a collector the complete Funko Pop series, a farmer's kid their own quail
+farm). At most one practical goal; the others should be personal and surprising. Every goal needs a different
+category, and none of these categories are allowed because the client already has them: {taken}.
+Don't repeat these existing or rejected goals: {existing}. Never suggest retirement if one exists.
+Amounts are rough typical Swiss prices (shown as editable estimates). Write label and reason in {language}.
+Goal types: {types}."""
 
 DRAFT_SYSTEM = """You turn a bank client's sentence into exactly one financial goal. Output JSON only, one of:
 {{"goal": {{"type": "home|target|retirement", "label": "max 40 chars", "amount": CHF, "years": years from today,
@@ -75,6 +86,8 @@ def situation(svc: "PlanningService", client_id: str) -> dict[str, Any]:
         "cash": round(p.balances.liquid), "invested": round(p.balances.invested), "pillar3a": round(p.balances.p3a),
         "owns_home": bool(x.get("owns_property")), "rent_monthly": round(p.monthly("housing")) if x.get("renter") else None,
         "has_car": p.hint("car") is not None, "top_spending": [f.label for f in p.flows if f.kind == "spending"][:5],
+        "shops_and_hobbies": sorted({m.merchant for f in p.flows if f.category in ("leisure_hobby", "shopping", "travel", "education")
+                                     for m in f.top_merchants[:4]})[:12],
         "notes_from_client": [n["text"] for n in st.notes],
     }
 
@@ -98,31 +111,51 @@ def to_goal(d: dict, as_of: date, canton: str | None, taken: set[str], origin: s
         when = when if when > start else date(start.year + 1, 6, 1)
         kind = "save" if str(d.get("kind", "")).lower().startswith("save") else "spend"
         params = {"price": round(amount, -3), "canton": canton} if typ == "home" else {"amount": round(amount, -1), "kind": kind}
+    category = _category(d, typ)
     goal = GoalSpec(id=_slug(label, taken), type=typ, label=label, target_date=when, params=params, status=status, origin=origin,
-                    note=(str(d.get("reason") or "").strip()[:200] or None))
+                    note=(str(d.get("reason") or "").strip()[:200] or None), category=category)
     parse_params(GOALS.get(typ), goal)          # raises if the plugin disagrees
     return goal
 
 
 # ---------------------------------------------------------------------------------------------------- suggestions
+def _category(d: dict, typ: str) -> str:
+    """LLM category if valid, else guess from the label so two 'car' ideas still collide."""
+    raw = str(d.get("category") or "").lower()
+    if raw in CATEGORIES:
+        return raw
+    if typ in ("home", "retirement"):
+        return typ
+    blob = f"{d.get('label', '')} {d.get('reason', '')}".lower()
+    for word, cat in _CATEGORY_HINTS:
+        if word in blob:
+            return cat
+    return "other"
+
+
 def rule_suggestions(svc: "PlanningService", client_id: str) -> list[dict]:
     """Personal suggestions that need no LLM (on top of the adapter's data-based seeds)."""
     s = situation(svc, client_id)
+    existing = svc.state(client_id).goals
+    taken_cat = {g.category for g in existing if g.category}
     age, out = s["age"] or 40, []
-    if age < 18:
-        out.append({"type": "target", "label": "A new games console", "amount": 600, "years": 0.5,
+    if age < 18 and "hobby" not in taken_cat:
+        out.append({"type": "target", "label": "A new games console", "amount": 600, "years": 0.5, "category": "hobby",
                     "reason": "Saved from pocket money in about half a year"})
-    if age >= 50 and s["employment"] in ("employed", "self_employed"):
+    has_retirement = any(g.type == "retirement" for g in existing)
+    if age >= 50 and s["employment"] in ("employed", "self_employed") and not has_retirement:
         out.append({"type": "retirement", "label": "Retire early at 60", "retirement_age": 60,
                     "reason": f"At {age}, early retirement is the big question"})
-    if s["children_ages"]:
+    if s["children_ages"] and "education" not in taken_cat:
         out.append({"type": "target", "label": "Education fund for the kids", "amount": 15_000 * len(s["children_ages"]), "kind": "save",
+                    "category": "education",
                     "years": max(1, 18 - min(s["children_ages"])), "reason": "Ready when your children start their education"})
-    if s["has_car"] and s["cash"] + s["invested"] > 250_000:
-        out.append({"type": "target", "label": "A sports car", "amount": 180_000, "years": 2,
+    if s["has_car"] and s["cash"] + s["invested"] > 250_000 and "car" not in taken_cat:
+        out.append({"type": "target", "label": "A sports car", "amount": 180_000, "years": 2, "category": "car",
                     "reason": "You drive, and you have the savings for a dream car"})
-    if s["spending_monthly"] and s["cash"] < 3 * s["spending_monthly"] and age >= 18:
+    if s["spending_monthly"] and s["cash"] < 3 * s["spending_monthly"] and age >= 18 and "safety" not in taken_cat:
         out.append({"type": "target", "label": "Safety cushion of 3 months", "amount": 3 * s["spending_monthly"], "years": 1, "kind": "save",
+                    "category": "safety",
                     "reason": "Your cash covers less than three months of spending"})
     return out
 
@@ -159,18 +192,20 @@ def _translate_ai_goals(svc: "PlanningService", st, lang: str) -> None:
 
 
 _GENERIC = {"fund", "your", "with", "from", "goal", "save", "saving", "savings", "plan", "family", "für", "eine", "einen",
-            "own", "new", "neue", "neuen", "kids", "children"}
+            "own", "new", "neue", "neuen", "kids", "children", "the", "for", "and", "buy", "get", "und", "ein", "der", "die",
+            "das", "mit", "big", "dream", "trip", "fund"}
 
 
 def _same_idea(a: GoalSpec, b: GoalSpec) -> bool:
-    """Near-duplicates: one home is enough, same retirement age, or a target sharing a meaningful word."""
+    """Near-duplicates: one home and one retirement are enough; otherwise the same category (except "other") or a
+    shared meaningful word ("Family car" vs "Buy a car")."""
     if a.type != b.type:
         return False
-    if a.type == "home":
+    if a.type in ("home", "retirement"):
         return True
-    if a.type == "retirement":
-        return a.params.get("retirement_age") == b.params.get("retirement_age")
-    words = lambda g: {w for w in re.findall(r"[a-zäöüéè]+", g.label.lower()) if len(w) >= 4 and w not in _GENERIC}  # noqa: E731
+    if a.category and a.category == b.category and a.category != "other":
+        return True
+    words = lambda g: {w for w in re.findall(r"[a-zäöüéè]+", g.label.lower()) if len(w) >= 3 and w not in _GENERIC}  # noqa: E731
     return bool(words(a) & words(b))
 
 
@@ -192,8 +227,11 @@ def _suggest(svc: "PlanningService", client_id: str, st, lang: str, use_llm: boo
     if llm is not None:
         st.ai_suggested = True
         existing = ", ".join([g.label for g in st.goals] + [label for _, label in st.dismissed]) or "none"
-        system = SUGGEST_SYSTEM.format(n=4, existing=existing, language="German" if lang == "de" else "English",
-                                       types=json.dumps(GOAL_TYPES))
+        taken = sorted({g.category for g in st.goals if g.category and g.category != "other"}
+                       | ({"home"} if any(g.type == "home" for g in st.goals) else set())
+                       | ({"retirement"} if any(g.type == "retirement" for g in st.goals) else set())) or ["none"]
+        system = SUGGEST_SYSTEM.format(n=4, existing=existing, taken=", ".join(taken), categories="|".join(CATEGORIES),
+                                       language="German" if lang == "de" else "English", types=json.dumps(GOAL_TYPES))
         try:
             ideas += [(d, "ai") for d in _json(llm.complete(system, json.dumps(situation(svc, client_id)), 1500)).get("goals", [])]
         except Exception as exc:  # the page still works with the rules' ideas
@@ -293,6 +331,9 @@ def draft(svc: "PlanningService", client_id: str, text: str, lang: str = "en", q
                  and g.target_date == goal.target_date and g.params == goal.params), None)
     if same is not None:                                  # typed twice: keep one
         return {"status": "goal", "goal": same}
+    if goal.type == "retirement":                          # only one retirement goal: the new one replaces it
+        with st.goals_lock:
+            st.goals = [g for g in st.goals if g.type != "retirement"]
     with st.goals_lock:
         st.goals = [*st.goals, goal]
         st.version += 1
@@ -315,14 +356,16 @@ Primitives:
 {catalogue}"""
 
 
-def ideas(svc: "PlanningService", client_id: str, goal_id: str, lang: str = "en", n: int = 3) -> dict[str, Any]:
-    """The AI's own ideas for one goal, registered as levers (the engine computes their effect). Cached per goal."""
+def ideas(svc: "PlanningService", client_id: str, goal_id: str, lang: str = "en", n: int = 3, more: bool = False) -> dict[str, Any]:
+    """The AI's own ideas for one goal, registered as levers (the engine computes their effect). Cached per goal;
+    `more` asks again for new ones and adds them."""
     from .session import Session
     from .tools import primitive_catalogue, propose_lever
     st = svc.state(client_id)
     with st.lock:
-        if goal_id in st.ai_ideas:
-            return {"ids": st.ai_ideas[goal_id], "cached": True}
+        before = st.ai_ideas.get(goal_id, [])
+        if goal_id in st.ai_ideas and not more:
+            return {"ids": before, "cached": True}
         llm = get_llm(svc.cfg)
         if llm is None:
             return {"ids": [], "available": False}
@@ -330,6 +373,7 @@ def ideas(svc: "PlanningService", client_id: str, goal_id: str, lang: str = "en"
         p = st.profile
         pl = svc.planner(client_id, goal, {})
         standard = [lv.title for lv in svc.levers(client_id, goal, pl.base, {}) if lv.group != "life_event"]
+        standard += [st.custom_levers[i].title for i in before if i in st.custom_levers]
         data = {"client": situation(svc, client_id), "goal": goal.model_dump(mode="json"),
                 "spending": [{"category": f.label, "monthly": round(f.monthly), "top_merchants": [m.merchant for m in f.top_merchants[:3]]}
                              for f in p.flows if f.kind == "spending"][:10],
@@ -371,5 +415,29 @@ def ideas(svc: "PlanningService", client_id: str, goal_id: str, lang: str = "en"
             if (ev.get("months_gained") or 0) <= 0 and ev.get("delta_p", 0) <= 0.005:
                 svc.remove_custom_lever(client_id, i)
                 ids.remove(i)
-        st.ai_ideas[goal_id] = ids
+        st.ai_ideas[goal_id] = [*before, *ids]
         return {"ids": ids, "rejected": len(rejected)}
+
+
+# ---------------------------------------------------------------------------------------------------- suggest a value
+VALUE_SYSTEM = """A bank client is answering a question while planning their finances. Propose a reasonable answer for
+THIS client: think it through with typical Swiss prices, rents, wages, returns and costs, and their situation. Output
+JSON only: {{"value": number (or a short text if the question isn't about a number), "low": number or null,
+"high": number or null, "unit": "CHF, CHF/month, %, years, ...", "reason": "one or two sentences: what the number is based on"}}
+Give a realistic middle value, not an optimistic one. Write the reason in {language}."""
+
+
+def suggest_value(svc: "PlanningService", client_id: str, question: str, context: str = "", lang: str = "en") -> dict[str, Any]:
+    """"Suggest a value" for a question the assistant asked: the AI's reasoned estimate, labelled as such."""
+    llm = get_llm(svc.cfg)
+    if llm is None:
+        return {"available": False}
+    try:
+        out = _json(llm.complete(VALUE_SYSTEM.format(language="German" if lang == "de" else "English"),
+                                 json.dumps({"question": question, "context": context, "client": situation(svc, client_id)},
+                                            ensure_ascii=False, default=str), 800))
+    except Exception as exc:
+        log.warning("value suggestion failed: %s", exc)
+        return {"available": False}
+    return {"available": True, "value": out.get("value"), "low": out.get("low"), "high": out.get("high"),
+            "unit": out.get("unit"), "reason": out.get("reason")}

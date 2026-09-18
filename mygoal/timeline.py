@@ -7,7 +7,10 @@ show in their own colors, and every drop or lock is a vertical step at the goal 
 Actions are simply on or off (`active`). Moving a goal later is an action too (`move:<goal id>:<date>`). One goal is in
 focus: the first one failing in more than `app.planning.alert_failure` of futures (or the one the client picked). For it
 the timeline lists the recommended actions (the engine's plan plus the AI's ideas) and, for every listed action, how
-many points it adds to that goal's chance of success.
+much it adds to that goal's chance of success on its own (against no actions at all, so the number never changes when
+other actions are switched on or off). Active actions with a big one-off outflow (buying something) are marked on the
+chart like goals. Financing a goal or a purchase with a loan is a separate action the client must switch on;
+remaining debt is drawn on the chart.
 """
 from __future__ import annotations
 
@@ -20,6 +23,7 @@ from .engine import simulate
 from .explain import t
 from .explain.translate import tr
 from .goals import GOALS, parse_params, target_date
+from .levers.loan import remaining_after, select_active
 from .model import GoalSpec, LeverImpact, add_months, months_between
 
 if TYPE_CHECKING:
@@ -72,12 +76,12 @@ def _shortfall(pl, impacts: list[LeverImpact], when: date) -> float:
     return round(float(gap.mean()), -2)
 
 
-def _card(svc: "PlanningService", lv: LeverImpact, lang: str) -> dict[str, Any]:
+def _card(svc: "PlanningService", lv: LeverImpact, lang: str, base=None, months: int | None = None) -> dict[str, Any]:
     """A lever card without ranking: enough for the list and the Details drawer."""
     return {"lever_id": lv.lever_id, "title": svc.lever_title(lv, lang), "description": tr(lv.description, lang), "group": lv.group,
             "effort": lv.effort, "confidence": lv.confidence, "side_effects": [tr(x, lang) for x in lv.side_effects],
             "product_trigger": lv.product_trigger, "icon": lv.icon,
-            "origin": lv.origin, "details": lv.details, "assumptions": [svc.view(a, lang).model_dump(mode="json") for a in lv.assumptions],
+            "origin": lv.origin, "details": svc.explain(lv, base, months), "assumptions": [svc.view(a, lang).model_dump(mode="json") for a in lv.assumptions],
             "months_gained": None, "delta_p": 0.0, "monthly_equivalent": 0.0, "impact_label": "", "active": False,
             "in_plan": False, "helps": True, "trade_off": False, "rank": None}
 
@@ -121,7 +125,7 @@ def build(svc: "PlanningService", client_id: str, active: list[str], overrides: 
         when, g, pl = items[k]
         by_id = levers_of(g, pl)
         prior = [c for w, h, _ in items[:k] if (c := _commit(h, pl.base, cfg, w)) is not None]
-        impacts = prior + [by_id[i] for i in lever_ids if i in by_id]
+        impacts = prior + select_active(by_id, lever_ids)
         return pl.p_success(impacts), impacts, pl, when
 
     items, plain = items_for(moves), items_for({})
@@ -153,28 +157,33 @@ def build(svc: "PlanningService", client_id: str, active: list[str], overrides: 
         fwhen, fg, fpl = next(x for x in items if x[1].id == focus_id)
         by_id = levers_of(fg, fpl)
         ideas = [i for i in st.ai_ideas.get(focus_id, []) if i in by_id]
-        recommended = [i for i in dict.fromkeys([*plan.plan, *ideas]) if i not in act_ids]
+        recommended = list(dict.fromkeys([*plan.plan, *ideas]))
+        optional = [i for i, lv in by_id.items() if lv.details.get("needs_agreement")]
         for c in plan.levers:
             cards[c.lever_id] = c.model_dump(mode="json")
         p_now = chance(items, focus_id, act_ids)[0]
+        p_plain = chance(plain, focus_id, [])[0]
+        plain_by_id = levers_of(*next((g, pl) for _, g, pl in plain if g.id == focus_id)) if focus_id not in moves else by_id
         gains = {}
-        for i in dict.fromkeys([*recommended, *(listed or []), *active]):
-            if i.startswith(MOVE):
+        for i in dict.fromkeys([*recommended, *optional, *(listed or []), *active]):
+            if i.startswith(MOVE):                        # each action on its own, against no actions at all
                 mv = {k: v for k, v in moves_of([i]).items() if k in ids}
                 if not mv:
                     continue
                 gid = next(iter(mv))
-                with_mv, without_mv = {**moves, **mv}, {k: v for k, v in moves.items() if k != gid}
-                gains[i] = chance(items_for(with_mv), focus_id, act_ids)[0] - chance(items_for(without_mv), focus_id, act_ids)[0]
+                gains[i] = chance(items_for(mv), focus_id, [])[0] - p_plain
                 g = next(x for x in confirmed if x.id == gid)
                 cards[i] = {**_card(svc, LeverImpact(lever_id=i, title="", group="goal_change", effort="medium", icon="calendar"), lang),
                             "title": t("actions.move", lang, label=svc.goal_label(g, lang), year=mv[gid].year), "origin": "user"}
             elif i in by_id:
-                on = [x for x in act_ids if x != i]
-                gains[i] = chance(items, focus_id, [*on, i])[0] - chance(items, focus_id, on)[0]
-                cards.setdefault(i, _card(svc, by_id[i], lang))
+                parent = by_id[i].details.get("finances")
+                if parent and parent != "goal" and parent in plain_by_id:
+                    gains[i] = chance(plain, focus_id, [parent, i])[0] - chance(plain, focus_id, [parent])[0]
+                else:
+                    gains[i] = chance(plain, focus_id, [i])[0] - p_plain if i in plain_by_id else 0.0
+                cards.setdefault(i, _card(svc, by_id[i], lang, fpl.base, months_between(fpl.base.start, fwhen)))
         actions = {"goal_id": focus_id, "goal_label": svc.goal_label(fg, lang), "goal_date": fwhen, "recommended": recommended,
-                   "gains": {k: round(v, 3) for k, v in gains.items()},
+                   "optional": optional, "gains": {k: round(v, 3) for k, v in gains.items()},
                    "p_from": round(chance(plain, focus_id, [])[0], 3), "p_to": round(p_now, 3)}
     for i in act_ids:                                     # active actions of goals that are fine still need a card
         if i not in cards:
@@ -184,13 +193,14 @@ def build(svc: "PlanningService", client_id: str, active: list[str], overrides: 
                     break
 
     all_levers = {i: lv for by_id in levers.values() for i, lv in by_id.items()}
-    chart = _chart(svc, client_id, items, [all_levers[i] for i in act_ids if i in all_levers], glob)
+    chart = _chart(svc, client_id, items, select_active(all_levers, act_ids), glob, lang)
     return {**chart, "goals": rows, "actions": actions, "cards": cards, "alert_failure": alert,
             "success_threshold": float(cfg.get_path("app.simulation.success_threshold", 0.7))}
 
 
-def _chart(svc: "PlanningService", client_id: str, items, act: list[LeverImpact], glob: dict) -> dict[str, Any]:
-    """One simulation with every spending goal paid at its date (active actions only): free, locked, pension."""
+def _chart(svc: "PlanningService", client_id: str, items, act: list[LeverImpact], glob: dict, lang: str = "en") -> dict[str, Any]:
+    """One simulation with every spending goal paid at its date (active actions only): free, locked, pension.
+    Big one-off outflows of active actions (buying something) come back as `events` and are vertical steps too."""
     if items:
         pl = items[0][2]
         base, market, N, seed = pl.base, pl.market, pl.N, pl.seed
@@ -211,6 +221,26 @@ def _chart(svc: "PlanningService", client_id: str, items, act: list[LeverImpact]
     med, low = np.median(free, axis=1), np.percentile(free, 10, axis=1)
     locked = np.zeros(T + 1)
     steps = set()
+    events = []
+    for lv in act:
+        for o in lv.one_offs:
+            i0 = months_between(base.start, o.at)
+            if o.bucket == "cash" and o.amount.mean() <= -1000 and 0 <= i0 < T:
+                steps.add(i0)
+                events.append({"date": o.at, "label": o.label or svc.lever_title(lv, lang),
+                               "amount": round(-o.amount.mean(), -2), "kind": "purchase"})
+    debt = np.zeros(T + 1)
+    for lv in act:
+        for d in lv.debts:
+            t0 = months_between(base.start, d.start)
+            if not (0 <= t0 < T):
+                continue
+            steps.add(t0)
+            events.append({"date": d.start, "label": d.label or t("flow.loan_event", lang, default="Loan"),
+                           "amount": round(d.principal, -2), "kind": "loan"})
+            scale = float(price[t0]) if d.indexed else 1.0
+            for i in range(t0 + 1, T + 1):
+                debt[i] += remaining_after(d.principal, d.annual_rate, d.term_months, i - t0 - 1) * scale
     for w, g, _ in items:
         i0 = months_between(base.start, w)
         if 0 <= i0 < T and g.type != "retirement":
@@ -227,5 +257,6 @@ def _chart(svc: "PlanningService", client_id: str, items, act: list[LeverImpact]
         "free_low": [round(float(low[i])) for _, i in points],
         "locked": [round(float(min(locked[i], max(med[i], 0)))) for _, i in points],
         "pension": [round(float(pension[i])) for _, i in points],
-        "start": base.start, "end": traj.date_at(T),
+        "start": base.start, "end": traj.date_at(T), "events": events,
+        "debt": [round(float(debt[i])) for _, i in points],
     }

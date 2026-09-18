@@ -117,7 +117,9 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
         setTimeline(tl)
         setLoading(false)
         const rec = (tl.actions?.recommended ?? []).filter((i) => !deleted.current.has(i))
-        setListed((cur) => (rec.some((i) => !cur.includes(i)) ? [...cur, ...rec.filter((i) => !cur.includes(i))] : cur))
+        const extra = (tl.actions?.optional ?? []).filter((i) => !deleted.current.has(i))
+        const add = [...rec, ...extra]
+        setListed((cur) => (add.some((i) => !cur.includes(i)) ? [...cur, ...add.filter((i) => !cur.includes(i))] : cur))
         const g = tl.actions?.goal_id
         if (g && !ideasAsked.current.has(g)) {
           ideasAsked.current.add(g)
@@ -260,7 +262,17 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
         <MainPage clientId={clientId} tl={timeline!} goals={confirmed} active={active} listed={listed} loading={loading} ideasLoading={ideasLoading}
           onToggle={toggle} onActivateAll={activateAll} onDelete={deleteAction} onDetails={setWhyId} onLever={addAction}
           onFocus={setFocus} onSaveGoal={saveGoal} onDeleteGoal={deleteGoal}
-          onPro={() => setPage('pro')} onFacts={openFacts} onGoals={() => setPage('goals')} />
+          onPro={() => setPage('pro')} onFacts={openFacts} onGoals={() => setPage('goals')}
+          onMoreIdeas={() => {
+            const g = timeline?.actions?.goal_id
+            if (!clientId || !g) return
+            setIdeasLoading((st) => ({ ...st, [g]: true }))
+            api.goalIdeas(clientId, g, lang, true).then((r) => {
+              if (!r.ids.length) return
+              setListed((cur) => [...cur, ...r.ids.filter((i) => !cur.includes(i))])
+              setVersion((v) => v + 1)
+            }).catch(() => {}).finally(() => setIdeasLoading((st) => ({ ...st, [g]: false })))
+          }} />
       ) : (
         <main className="mx-auto max-w-7xl space-y-4 px-4 py-4">
           <div className="flex flex-wrap items-center gap-4 text-sm">

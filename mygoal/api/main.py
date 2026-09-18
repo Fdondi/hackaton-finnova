@@ -84,6 +84,12 @@ class TimelineRequest(BaseModel):
     lang: str = "en"
 
 
+class ValueRequest(BaseModel):
+    question: str
+    context: str = ""
+    lang: str = "en"
+
+
 class FactsRequest(BaseModel):
     overrides: dict[str, dict[str, float]] = {}
     lang: str = "en"
@@ -195,9 +201,17 @@ def goal_ideas(client_id: str, goal_id: str, req: LangRequest):
     _client(client_id)
     from ..agent.goal_assistant import ideas
     try:
-        return ideas(svc(), client_id, goal_id, req.lang)
+        return ideas(svc(), client_id, goal_id, req.lang, more=req.more)
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
+
+
+@app.post("/api/clients/{client_id}/suggest-value")
+def suggest_value(client_id: str, req: ValueRequest):
+    """"Suggest a value" next to a question: the AI's reasoned estimate for this client."""
+    _client(client_id)
+    from ..agent.goal_assistant import suggest_value as sv
+    return sv(svc(), client_id, req.question, req.context, req.lang)
 
 
 @app.post("/api/clients/{client_id}/facts")

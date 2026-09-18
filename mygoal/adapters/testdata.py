@@ -207,14 +207,15 @@ class TestdataSource:
             price = max(s["min_price"], min(price, s["max_income_multiple"] * gross_estimate)) if gross_estimate else price
             goals.append(GoalSpec(id=s["id"], type="home", label=s["label"].format(canton=client.canton or ""),
                                   target_date=date(as_of.year + s["years"], 6, 1),
-                                  params={"price": round(price, -4), "canton": client.canton}, status="suggested", origin="data",
+                                  params={"price": round(price, -4), "canton": client.canton}, status="suggested", origin="data", category="home",
                                   note="You rent; typical price of homes owned by the bank's clients in your canton"))
         if (s := seeds.get("travel")) and applies(s["when"]):
             goals.append(GoalSpec(id=s["id"], type="target", label=s["label"], priority=2,
                                   target_date=date(as_of.year + s["years"], 6, 1), params={"amount": s["amount"]},
-                                  status="suggested", origin="data", note="Travel is one of your interests"))
+                                  status="suggested", origin="data", category="travel",
+                                  note="Travel is one of your interests"))
         if (s := seeds.get("retirement")) and applies(s["when"]):
             goals.append(GoalSpec(id=s["id"], type="retirement", label=s["label"], priority=3,
-                                  params={"retirement_age": s["retirement_age"]}, status="suggested", origin="data",
+                                  params={"retirement_age": s["retirement_age"]}, status="suggested", origin="data", category="retirement",
                                   note="Everyone working needs this one"))
         return goals

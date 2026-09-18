@@ -4,12 +4,48 @@ import { api, type WhatIfResult } from '../api'
 import { chf } from '../format'
 import { useT } from '../i18n'
 import { Markdown } from './Markdown'
+import { MonthlyFigure } from './WhyDrawer'
 
 interface Conversation { key: number; text: string; busy: boolean; result: WhatIfResult | null; answer: string; error: string | null }
 
+/** Research a reasonable number for a question the assistant just asked. */
+export function SuggestValueButton({ clientId, question, context, onPick }: {
+  clientId: string; question: string; context?: string; onPick: (value: string, reason: string) => void
+}) {
+  const { t, lang } = useT()
+  const [busy, setBusy] = useState(false)
+  const [hint, setHint] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const run = async () => {
+    setBusy(true); setError(null)
+    try {
+      const r = await api.suggestValue(clientId, { question, context: context ?? '', lang })
+      if (!r.available || r.value === undefined || r.value === null) {
+        setError(t('flow.suggest_unavailable', {}, 'No suggestion available (AI is off).'))
+        return
+      }
+      onPick(String(r.value), r.reason ?? '')
+      setHint(r.reason ?? null)
+    } catch (e) {
+      setError(String(e))
+    } finally { setBusy(false) }
+  }
+  return (
+    <div className="w-full">
+      <button type="button" onClick={run} disabled={busy}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-llm/50 px-2.5 py-1 text-xs text-llm hover:bg-llm-wash disabled:opacity-50">
+        {busy ? <LoaderCircle size={12} className="animate-spin" /> : <Sparkles size={12} />}
+        {t('flow.suggest_value', {}, 'Suggest a value')}
+      </button>
+      {hint && <p className="mt-1 text-xs text-ink-2">{hint}</p>}
+      {error && <p className="mt-1 text-xs text-critical">{error}</p>}
+    </div>
+  )
+}
+
 /** One what-if as a provisional action: its conversation, the resulting action, and Accept / Discard. */
-function ProvisionalCard({ c, onAnswer, onAccept, onDiscard }: {
-  c: Conversation; onAnswer: (answer: string) => void; onAccept: () => void; onDiscard: () => void
+function ProvisionalCard({ c, clientId, onAnswer, onAccept, onDiscard }: {
+  c: Conversation; clientId: string; onAnswer: (answer: string) => void; onAccept: () => void; onDiscard: () => void
 }) {
   const { t } = useT()
   const [answer, setAnswer] = useState(c.answer)
@@ -50,18 +86,30 @@ function ProvisionalCard({ c, onAnswer, onAccept, onDiscard }: {
               )}
               {r.question.unit && <span className="text-ink-2">{r.question.unit}</span>}
               <button type="submit" className="rounded-lg bg-accent px-3 py-1.5 font-medium text-white">OK</button>
+              {r.question.kind !== 'choice' && (
+                <SuggestValueButton clientId={clientId} question={r.question.text} context={c.text}
+                  onPick={(v) => setAnswer(v)} />
+              )}
             </form>
           )}
           {r.status !== 'question' && r.message && (
             <Markdown text={r.message} className={r.status === 'unsupported' || r.status === 'error' ? 'text-ink-2' : ''} />
           )}
           {r.evaluation && (
-            <p className="text-xs text-ink-2">
-              {r.evaluation.months_gained ? `${Math.abs(r.evaluation.months_gained) === 1
-                ? (r.evaluation.months_gained > 0 ? t('lever.month_gained', {}, '1 month sooner') : t('lever.month_lost', {}, '1 month later'))
-                : r.evaluation.months_gained > 0 ? t('lever.months_gained', { months: r.evaluation.months_gained }) : t('lever.months_lost', { months: -r.evaluation.months_gained })} · ` : ''}
-              {chf(r.evaluation.monthly_equivalent)}/{t('ui.month_short', {}, 'mo')}
-            </p>
+            <div>
+              <p className="text-xs text-ink-2">
+                {r.evaluation.months_gained ? `${Math.abs(r.evaluation.months_gained) === 1
+                  ? (r.evaluation.months_gained > 0 ? t('lever.month_gained', {}, '1 month sooner') : t('lever.month_lost', {}, '1 month later'))
+                  : r.evaluation.months_gained > 0 ? t('lever.months_gained', { months: r.evaluation.months_gained }) : t('lever.months_lost', { months: -r.evaluation.months_gained })} · ` : ''}
+                {r.evaluation.monthly_equivalent !== 0 && `${r.evaluation.monthly_equivalent > 0 ? '+' : ''}${chf(r.evaluation.monthly_equivalent)}/${t('ui.month_short', {}, 'mo')}`}
+                {r.evaluation.how_the_monthly_figure_comes_about?.once
+                  ? `${r.evaluation.monthly_equivalent !== 0 ? ' · ' : ''}${chf(r.evaluation.how_the_monthly_figure_comes_about.once)} ${t('flow.once_short', {}, 'once')}`
+                  : r.evaluation.monthly_equivalent === 0 ? `${chf(0)}/${t('ui.month_short', {}, 'mo')}` : ''}
+              </p>
+              {r.evaluation.how_the_monthly_figure_comes_about && (
+                <MonthlyFigure b={r.evaluation.how_the_monthly_figure_comes_about} />
+              )}
+            </div>
           )}
           {done && (
             <div className="flex gap-2">
@@ -121,7 +169,7 @@ export function WhatIfBox({ clientId, goalId, onLever }: { clientId: string; goa
       {convs.length > 0 && (
         <ul className="mt-3 space-y-2">
           {convs.map((c) => (
-            <ProvisionalCard key={c.key} c={c}
+            <ProvisionalCard key={c.key} c={c} clientId={clientId}
               onAnswer={(a) => c.result && run(c.key, api.answer(c.result.session_id, a))}
               onAccept={() => { if (c.result?.lever_id) onLever(c.result.lever_id); setConvs((cs) => cs.filter((x) => x.key !== c.key)) }}
               onDiscard={() => discard(c)} />

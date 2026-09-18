@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api, type GoalSpec } from '../api'
 import { GoalEditor } from '../components/GoalEditor'
 import { Markdown } from '../components/Markdown'
+import { SuggestValueButton } from '../components/WhatIfBox'
 import { chf, monthLabel } from '../format'
 import { useT } from '../i18n'
 
@@ -168,13 +169,15 @@ export function GoalsPage({ clientId, name, onContinue, onFacts }: {
             <form className="mt-3 rounded-xl border border-llm/40 bg-llm-wash p-3" onSubmit={(e) => { e.preventDefault(); send(question.original, question, answer) }}>
               <div className="flex items-center gap-1.5 text-sm font-medium text-llm"><Sparkles size={14} />{t('flow.one_question', {}, 'One question')}</div>
               <Markdown text={question.text} className="mt-1 text-sm" />
-              <div className="mt-2 flex gap-2">
+              <div className="mt-2 flex flex-wrap gap-2">
                 <input autoFocus value={answer} onChange={(e) => setAnswer(e.target.value)} disabled={busy}
                   className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-2 py-1.5 text-sm" />
                 <button type="submit" disabled={busy || !answer.trim()} className="rounded-lg bg-accent px-3 py-1.5 text-sm text-white disabled:opacity-30">
                   {busy ? <LoaderCircle size={16} className="animate-spin" /> : t('flow.answer', {}, 'Answer')}
                 </button>
                 <button type="button" onClick={() => setQuestion(null)} className="rounded-lg px-2 text-sm text-ink-2 hover:bg-surface">{t('ui.cancel', {}, 'Cancel')}</button>
+                <SuggestValueButton clientId={clientId} question={question.text} context={question.original}
+                  onPick={(v) => setAnswer(v)} />
               </div>
             </form>
           )}

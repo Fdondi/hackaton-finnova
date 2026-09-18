@@ -187,7 +187,9 @@ def asset_acquire(p: AssetAcquire, ctx: LeverContext, lever_id: str, book: Assum
     running = p.running_costs_monthly.read(book, "running_costs_monthly")
     return _impact(p, lever_id, book, confidence="estimated",
                    one_offs=[OneOff(at=at, amount=p.price.dist(price).scaled(-1), label=p.asset)],
-                   recurring=[RecurringDelta(start=at, monthly=p.running_costs_monthly.dist(running).scaled(-1), label=f"{p.asset} costs")])
+                   recurring=[RecurringDelta(start=at, monthly=p.running_costs_monthly.dist(running).scaled(-1), label=f"{p.asset} costs")],
+                   details={"notes": [f"Buying {p.asset} for CHF {price:,.0f} in {p.in_months} months, then CHF {running:,.0f}/month "
+                                      f"running costs".replace(",", "'")]})
 
 
 @primitive("income_change", IncomeChange, "Change in income: side business, part-time, raise, sabbatical.")
@@ -195,7 +197,7 @@ def income_change(p: IncomeChange, ctx: LeverContext, lever_id: str, book: Assum
     start = add_months(ctx.start, p.start_in_months)
     end = add_months(start, p.duration_months - 1) if p.duration_months else None
     delta = p.net_monthly_delta.read(book, "net_monthly_delta")
-    recurring, income = [], []
+    recurring, income, notes = [], [], []
     if delta:
         keep = 1.0
         if p.taxable_side_income and delta > 0:
@@ -204,6 +206,9 @@ def income_change(p: IncomeChange, ctx: LeverContext, lever_id: str, book: Assum
             social = book.get("social_rate", ctx.cfg.get_path("tax.self_employed_social_rate", 0.1),
                               label="Self-employed social contributions", unit="share", source="market_default", low=0.05, high=0.12, step=0.005)
             keep = max(0.0, 1 - tax - social)
+        notes.append(f"You said CHF {delta:,.0f}/month; after income tax ({tax:.0%}) and social contributions ({social:.0%}) "
+                     f"we count CHF {delta * keep:,.0f}/month".replace(",", "'") if keep < 1 else
+                     f"CHF {delta:,.0f}/month as you said".replace(",", "'"))
         dist = p.net_monthly_delta.dist(delta * keep)
         if p.volatility > 0:
             from ..model.dist import LogNormal
@@ -217,7 +222,10 @@ def income_change(p: IncomeChange, ctx: LeverContext, lever_id: str, book: Assum
             lower_tax = book.get("tax_reduction_monthly", ctx.profile.monthly("taxes") * (1 - p.salary_factor) * 1.2,
                                  label="Lower taxes per month", unit="CHF/month", source="market_default", step=10)
             recurring.append(RecurringDelta(start=start, end=end, monthly=fixed(lower_tax), label="Lower taxes"))
-    return _impact(p, lever_id, book, confidence="estimated", recurring=recurring, income_changes=income)
+    if p.start_in_months:
+        notes.append(f"Starts in {p.start_in_months} months")
+    return _impact(p, lever_id, book, confidence="estimated", recurring=recurring, income_changes=income,
+                   details={"notes": notes})
 
 
 @primitive("one_off", OneOffPrimitive, "A single payment or windfall at a date (wedding, renovation, inheritance).")
@@ -293,7 +301,11 @@ def invest(p: Invest, ctx: LeverContext, lever_id: str, book: AssumptionBook) ->
     monthly = p.amount_monthly.read(book, "amount_monthly") if p.amount_monthly is not None else 0.0
     inv = Investment(start=add_months(ctx.start, p.in_months), once=fixed(once) if once else None,
                      monthly=fixed(monthly) if monthly else None, expected_return=r, volatility=vol, label=p.title)
-    return _impact(p, lever_id, book, confidence="estimated", investments=[inv])
+    note = (f"CHF {once:,.0f} now" if once else "") + (" + " if once and monthly else "") + \
+        (f"CHF {monthly:,.0f}/month" if monthly else "")
+    return _impact(p, lever_id, book, confidence="estimated", investments=[inv], details={"notes": [
+        f"{note} invested at {r:.0%} a year expected, {vol:.0%} volatility: the money stays yours; only the expected "
+        f"return counts as a gain, and the risk widens the range".replace(",", "'")]})
 
 
 @primitive("goal_change", GoalChangePrimitive, "Change the goal itself: cheaper home, smaller amount, later date.")
@@ -315,9 +327,13 @@ def combine(lever_id: str, title: str, parts: list[LeverImpact], **kw) -> LeverI
     merged = LeverImpact(lever_id=lever_id, title=title, **kw)
     seen: set[str] = set()
     for p in parts:
-        for f in ("one_offs", "contingent", "recurring", "shocks", "income_changes", "allocation_changes", "withdrawals",
-                  "goal_changes", "side_effects"):
+        for f in ("one_offs", "contingent", "recurring", "shocks", "income_changes", "allocation_changes", "investments",
+                  "withdrawals", "debts", "goal_changes", "side_effects"):
             getattr(merged, f).extend(getattr(p, f))
+        merged.details.setdefault("notes", []).extend(p.details.get("notes", []))
+        if p.details.get("needs_agreement"):
+            merged.details["needs_agreement"] = True
+        merged.settings.update(p.settings)
         for a in p.assumptions:
             if a.key not in seen:
                 merged.assumptions.append(a)

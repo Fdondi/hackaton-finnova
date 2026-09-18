@@ -90,29 +90,94 @@ class LeverScore(BaseModel):
 
 
 def monthly_equivalent(lever: LeverImpact, start: date, months: int, salary_monthly: float = 0.0) -> float:
-    """Deterministic average CHF/month over `months` (for display only; the engine uses the full distributions)."""
+    """Ongoing CHF/month this lever changes (display only; the engine uses the full distributions).
+
+    One-off purchases and sales are not converted into a monthly figure: they hit cash at their date, like a goal.
+    """
     months = max(months, 1)
     end = add_months(start, months)
-    total = 0.0
+    monthly = 0.0
+    for r in lever.recurring:
+        a, b = max(r.start, start), min(r.end or end, end)
+        if max(0, months_between(a, b) + (1 if r.end else 0)) <= 0:
+            continue
+        monthly += r.monthly.mean() * (0.75 if r.behavioural else 1.0)
+    for i in lever.income_changes:
+        a, b = max(i.start, start), min(i.end or end, end)
+        if max(0, months_between(a, b) + (1 if i.end else 0)) <= 0:
+            continue
+        if i.monthly_net is not None:
+            monthly += i.monthly_net.mean()
+        if i.salary_factor is not None:
+            monthly += (i.salary_factor - 1) * salary_monthly
+    for s in lever.shocks:
+        a, b = max(s.start, start), min(s.end or end, end)
+        if max(0, months_between(a, b)) <= 0:
+            continue
+        monthly -= s.annual_prob / 12 * s.severity.mean()
+    for inv in lever.investments:
+        monthly += _investment_monthly(inv, start, end)
+    return monthly
+
+
+def _investment_lines(inv, start: date, end: date, months: int) -> list[tuple[str, float]]:
+    """Expected extra CHF/month from an investment pot: return on the average balance, not the capital itself."""
+    rate = _investment_monthly(inv, start, end)
+    return [("return", rate)] if rate else []
+
+
+def _investment_monthly(inv, start: date, end: date) -> float:
+    n = max(0, months_between(max(inv.start, start), end))
+    once = inv.once.mean() if inv.once is not None else 0.0
+    contrib = inv.monthly.mean() if inv.monthly is not None else 0.0
+    avg_balance = once + contrib * n / 2
+    return avg_balance * inv.expected_return / 12 if n else 0.0
+
+
+def breakdown(lever: LeverImpact, start: date, months: int, salary_monthly: float = 0.0) -> dict:
+    """How the monthly figure on a card comes about: the ongoing income or cost (after tax, habits, expected return),
+    plus any one-off purchase/sale listed separately — that outflow is instantaneous, like a goal, not a monthly amount."""
+    months = max(months, 1)
+    end = add_months(start, months)
+    lines = []
     for r in lever.recurring:
         a, b = max(r.start, start), min(r.end or end, end)
         n = max(0, months_between(a, b) + (1 if r.end else 0))
         share = 0.75 if r.behavioural else 1.0
-        total += r.monthly.mean() * n * share
+        if n:
+            monthly = round(r.monthly.mean() * share, 2)
+            explain = (f"{share:.0%} of this change counted long-term (habits fade)" if share < 1
+                       else f"CHF {r.monthly.mean():,.0f}/month".replace(",", "'"))
+            lines.append({"label": r.label or lever.title, "kind": "monthly", "amount": round(r.monthly.mean(), 2), "months": n,
+                          "share": share, "monthly": monthly, "explain": explain})
     for o in lever.one_offs:
         if start <= o.at < end and o.bucket == "cash":
-            total += o.amount.mean()
+            amt = o.amount.mean()
+            verb = "received" if amt > 0 else "paid"
+            lines.append({"label": o.label or lever.title, "kind": "once", "amount": round(amt, 2), "months": 0,
+                          "monthly": 0.0,
+                          "explain": f"CHF {amt:,.0f} {verb} once at that date, like a goal — not part of the monthly figure".replace(",", "'")})
     for i in lever.income_changes:
         a, b = max(i.start, start), min(i.end or end, end)
         n = max(0, months_between(a, b) + (1 if i.end else 0))
-        if i.monthly_net is not None:
-            total += i.monthly_net.mean() * n
-        if i.salary_factor is not None:
-            total += (i.salary_factor - 1) * salary_monthly * n
-    for s in lever.shocks:
-        a, b = max(s.start, start), min(s.end or end, end)
-        total -= s.annual_prob / 12 * s.severity.mean() * max(0, months_between(a, b))
-    return total / months
+        if n and i.monthly_net is not None:
+            lines.append({"label": i.label or lever.title, "kind": "monthly", "amount": round(i.monthly_net.mean(), 2), "months": n,
+                          "share": 1.0, "monthly": round(i.monthly_net.mean(), 2),
+                          "explain": f"CHF {i.monthly_net.mean():,.0f}/month".replace(",", "'")})
+        if n and i.salary_factor is not None:
+            amt = (i.salary_factor - 1) * salary_monthly
+            lines.append({"label": i.label or lever.title, "kind": "monthly", "amount": round(amt, 2), "months": n, "share": 1.0,
+                          "monthly": round(amt, 2),
+                          "explain": f"Salary change of {amt:,.0f}/month".replace(",", "'")})
+    for inv in lever.investments:
+        for _, v in _investment_lines(inv, start, end, months):
+            lines.append({"label": inv.label or lever.title, "kind": "return", "rate": inv.expected_return,
+                          "amount": round(v, 2), "months": months, "monthly": round(v, 2),
+                          "explain": f"Expected return only (the capital itself stays yours); {inv.expected_return:.0%}/year"})
+    monthly_lines = [x for x in lines if x["kind"] != "once"]
+    once = round(sum(x["amount"] for x in lines if x["kind"] == "once"), 2)
+    return {"lines": lines, "months": months, "until": end, "notes": list(lever.details.get("notes", [])),
+            "total": round(sum(x["monthly"] for x in monthly_lines), 2), "once": once}
 
 
 def apply_goal_changes(spec: GoalSpec, impacts: list[LeverImpact]) -> GoalSpec:

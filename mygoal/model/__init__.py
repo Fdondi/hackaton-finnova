@@ -4,7 +4,7 @@ from .dates import add_months, month_start, months_between
 from .dist import Dist, empirical, fixed, lognormal, normal, triangular, uniform
 from .goals import GoalSpec
 from .levers import (
-    AllocationDelta, ContingentOneOff, GoalChange, IncomeDelta, Investment, LeverImpact, OneOff, RecurringDelta, Shock,
+    AllocationDelta, ContingentOneOff, Debt, GoalChange, IncomeDelta, Investment, LeverImpact, OneOff, RecurringDelta, Shock,
     Withdrawal,
 )
 

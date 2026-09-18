@@ -28,6 +28,7 @@ export interface GoalSpec {
   origin?: 'data' | 'ai' | 'user'
   note?: string | null
   i18n?: Record<string, { label: string; note: string }>
+  category?: string | null
 }
 
 export type DraftResult =
@@ -57,6 +58,7 @@ export interface TimelineActions {
   goal_label: string
   goal_date: string
   recommended: string[]
+  optional?: string[]
   gains: Record<string, number>
   p_from: number
   p_to: number
@@ -74,6 +76,8 @@ export interface Timeline {
   goals: TimelineGoal[]
   actions: TimelineActions | null
   cards: Record<string, LeverCard>
+  events: { date: string; label: string; amount: number; kind?: 'purchase' | 'loan' }[]
+  debt?: number[]
   alert_failure: number
   success_threshold: number
 }
@@ -150,6 +154,15 @@ export interface GoalOutcome {
   constraint_pass: Record<string, number>
   p_buffer_breach: number
   fan: FanChart | null
+}
+
+export interface MonthlyBreakdown {
+  lines: { label: string; kind: string; amount: number; months: number; monthly: number; share?: number; rate?: number; explain?: string }[]
+  months: number
+  until: string
+  notes: string[]
+  total: number
+  once?: number
 }
 
 export interface LeverCard {
@@ -308,7 +321,7 @@ export interface WhatIfResult {
   question: WhatIfQuestion | null
   lever_id: string | null
   steps: { kind: string; name: string; summary: string }[]
-  evaluation: { months_gained: number | null; monthly_equivalent: number; delta_p: number } | null
+  evaluation: { months_gained: number | null; monthly_equivalent: number; delta_p: number; how_the_monthly_figure_comes_about?: MonthlyBreakdown | null } | null
 }
 
 export interface AdvisorAgenda {
@@ -369,6 +382,9 @@ export const api = {
   factsReading: (client: string, lang: string) => call<FactsReading>(`/clients/${client}/facts/ai?lang=${lang}`),
   timeline: (client: string, body: { active: string[]; overrides: Overrides; lang: string; focus?: string | null; listed?: string[] }, signal?: AbortSignal) =>
     call<Timeline>(`/clients/${client}/timeline`, { method: 'POST', body: JSON.stringify(body), signal }),
-  goalIdeas: (client: string, goal: string, lang: string) =>
-    call<{ ids: string[] }>(`/clients/${client}/goals/${goal}/ideas`, { method: 'POST', body: JSON.stringify({ lang }) }),
+  goalIdeas: (client: string, goal: string, lang: string, more = false) =>
+    call<{ ids: string[] }>(`/clients/${client}/goals/${goal}/ideas`, { method: 'POST', body: JSON.stringify({ lang, more }) }),
+  suggestValue: (client: string, body: { question: string; context?: string; lang: string }) =>
+    call<{ available: boolean; value?: number | string; low?: number | null; high?: number | null; unit?: string; reason?: string }>(
+      `/clients/${client}/suggest-value`, { method: 'POST', body: JSON.stringify(body) }),
 }

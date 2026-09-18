@@ -135,3 +135,65 @@ def test_an_investment_is_its_own_pot_with_its_own_return_and_risk(fresh):
     assert float(np.median(calm.invested[-1] - none.invested[-1])) > 20000   # the pot counts as invested money
     spread = lambda tr_: float(np.percentile(tr_.invested[-1], 90) - np.percentile(tr_.invested[-1], 10))  # noqa: E731
     assert spread(wild) > 2 * spread(calm)
+
+
+def test_only_one_retirement_goal(fresh):
+    assert [g.params["retirement_age"] for g in fresh.state("lena").goals if g.type == "retirement"] == [65]
+    ga.draft(fresh, "lena", "retire at 60")
+    retire = [g for g in fresh.state("lena").goals if g.type == "retirement"]
+    assert len(retire) == 1 and retire[0].params["retirement_age"] == 60
+
+
+def test_same_category_is_the_same_idea():
+    from mygoal.model import GoalSpec
+    car = GoalSpec(id="a", type="target", label="Family car", params={"amount": 20000}, category="car")
+    other_car = GoalSpec(id="b", type="target", label="A Ferrari", params={"amount": 180000}, category="car")
+    trek = GoalSpec(id="c", type="target", label="Himalaya trek", params={"amount": 8000}, category="travel")
+    assert ga._same_idea(car, other_car) and not ga._same_idea(car, trek)
+    r1 = GoalSpec(id="r1", type="retirement", label="Retire at 65", params={"retirement_age": 65}, category="retirement")
+    r2 = GoalSpec(id="r2", type="retirement", label="Retire early", params={"retirement_age": 60}, category="retirement")
+    assert ga._same_idea(r1, r2)
+
+
+def test_action_gains_stay_put_when_toggled(fresh):
+    from mygoal import timeline
+    ga.draft(fresh, "lena", "a car for CHF 30'000 in 2 years")
+    tl = timeline.build(fresh, "lena", [], {}, "en")
+    act = tl["actions"]
+    assert act
+    before = dict(act["gains"])
+    rec = [i for i in act["recommended"] if not i.startswith("move:")][:2]
+    on = timeline.build(fresh, "lena", rec, {}, "en", listed=list(before))
+    assert on["actions"]
+    for i, g in before.items():
+        assert on["actions"]["gains"][i] == pytest.approx(g, abs=1e-9)
+
+
+def test_buying_something_marks_a_chart_event_and_explains_the_monthly_figure(fresh):
+    from mygoal import timeline
+    from mygoal.agent.session import Session
+    from mygoal.agent.tools import propose_lever
+    s = Session(client_id="lena", goal_id="home", text="buy a quail farm", lang="en")
+    _, err = propose_lever(fresh, s, {"title": "Quail farm", "parts": [
+        {"primitive": "one_off", "params": {"amount": {"value": -25000, "label": "Farm setup", "source": "user"}, "in_months": 6}},
+        {"primitive": "income_change", "params": {
+            "net_monthly_delta": {"value": 350, "label": "Farm income", "source": "user"}, "taxable_side_income": True}},
+    ]}, created_by="test")
+    assert not err and s.lever_id
+    events = timeline.build(fresh, "lena", [s.lever_id], {}, "en")["events"]
+    assert any(e["amount"] >= 24000 for e in events)
+    how = fresh.evaluate_lever("lena", "home", s.lever_id)["how_the_monthly_figure_comes_about"]
+    assert how["notes"] and "350" in how["notes"][0]
+    assert how["once"] <= -24000
+    assert 0 < how["total"] < 350
+    ev = fresh.evaluate_lever("lena", "home", s.lever_id)
+    assert ev["monthly_equivalent"] == how["total"] or abs(ev["monthly_equivalent"] - how["total"]) < 1
+
+
+def test_plan_breakdown_uses_months_until_the_goal(lena_plan):
+    with_b = [c for c in lena_plan.levers if (c.details or {}).get("breakdown", {}).get("months")]
+    assert with_b and all(c.details["breakdown"]["months"] > 12 for c in with_b)
+
+
+def test_suggest_value_without_llm_says_unavailable(fresh):
+    assert ga.suggest_value(fresh, "lena", "How much would a used car cost?") == {"available": False}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-const VARS = ['--series-1', '--series-2', '--muted', '--grid', '--axis', '--ink', '--ink-2', '--surface', '--critical', '--good'] as const
+const VARS = ['--series-1', '--series-2', '--muted', '--grid', '--axis', '--ink', '--ink-2', '--surface', '--critical', '--good', '--warning'] as const
 
 /** Chart colors are CSS tokens; SVG attributes need resolved values, re-read when the color scheme flips. */
 export function useTokens() {

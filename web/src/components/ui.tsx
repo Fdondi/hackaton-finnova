@@ -1,5 +1,5 @@
 import {
-  Baby, Briefcase, Building2, CalendarClock, Car, CircleX, Heart, HeartPulse, House, Landmark, Scissors, Sparkles, Split, Target, TrendingUp,
+  Baby, Banknote, Briefcase, Building2, CalendarClock, Car, CircleX, Heart, HeartPulse, House, Landmark, Scissors, Sparkles, Split, Target, TrendingUp,
   type LucideIcon,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
@@ -9,10 +9,11 @@ export function Card({ children, className = '' }: { children: ReactNode; classN
   return <section className={`rounded-2xl border border-line bg-surface ${className}`}>{children}</section>
 }
 
-type Tone = 'good' | 'bad' | 'neutral' | 'accent' | 'llm'
+type Tone = 'good' | 'bad' | 'neutral' | 'accent' | 'llm' | 'warning'
 const TONES: Record<Tone, string> = {
   good: 'bg-good/10 text-good-text',
   bad: 'bg-critical/10 text-critical',
+  warning: 'bg-warning/20 text-ink',
   neutral: 'bg-surface-2 text-ink-2',
   accent: 'bg-accent-wash text-accent',
   llm: 'bg-llm-wash text-llm',
@@ -51,7 +52,7 @@ export function SourceBadge({ source, label }: { source: Source; label: string }
 }
 
 const ICONS: Record<string, LucideIcon> = {
-  'trending-up': TrendingUp, landmark: Landmark, 'x-circle': CircleX, scissors: Scissors, building: Building2,
+  'trending-up': TrendingUp, landmark: Landmark, banknote: Banknote, 'x-circle': CircleX, scissors: Scissors, building: Building2,
   home: House, target: Target, car: Car, 'heart-pulse': HeartPulse, baby: Baby, heart: Heart, split: Split,
   briefcase: Briefcase, calendar: CalendarClock,
 }
