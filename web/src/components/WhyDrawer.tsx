@@ -1,4 +1,5 @@
 import { RotateCcw, TriangleAlert, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import type { Assumption, LeverCard } from '../api'
 import { chf, formatValue } from '../format'
 import { useT } from '../i18n'
@@ -8,11 +9,14 @@ function AssumptionRow({ a, onChange }: { a: Assumption; onChange: (key: string,
   const { t } = useT()
   const hasRange = a.low !== null && a.high !== null && a.high > a.low
   const step = a.step ?? (hasRange ? (a.high! - a.low!) / 50 : 1)
+  // the control follows the hand at once; the recalculated value comes back from the server and re-syncs it
+  const [v, setV] = useState(a.value)
+  useEffect(() => { setV(a.value) }, [a.value])
   return (
     <li className="border-b border-line py-3 last:border-0">
       <div className="flex items-start justify-between gap-2">
         <div className="text-sm">{a.label}</div>
-        <div className="text-sm font-semibold whitespace-nowrap tabular">{formatValue(a.value, a.unit)}</div>
+        <div className="text-sm font-semibold whitespace-nowrap tabular">{formatValue(v, a.unit)}</div>
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-1.5">
         <SourceBadge source={a.source} label={a.source_label} />
@@ -26,15 +30,16 @@ function AssumptionRow({ a, onChange }: { a: Assumption; onChange: (key: string,
         hasRange ? (
           <div className="mt-2 flex items-center gap-2">
             <span className="w-16 text-right text-xs text-muted tabular">{formatValue(a.low!, a.unit)}</span>
-            <input type="range" min={a.low!} max={a.high!} step={step} value={a.value} aria-label={a.label}
+            <input type="range" min={a.low!} max={a.high!} step={step} value={v} aria-label={a.label}
               className={`flex-1 ${a.source === 'llm_estimate' ? 'llm' : ''}`}
-              onChange={(e) => onChange(a.key, Number(e.target.value))} />
+              onChange={(e) => { const x = Number(e.target.value); setV(x); onChange(a.key, x) }} />
             <span className="w-16 text-xs text-muted tabular">{formatValue(a.high!, a.unit)}</span>
           </div>
         ) : (
-          <input type="number" defaultValue={a.value} step={a.step ?? 'any'} aria-label={a.label}
+          <input type="number" value={v} step={a.step ?? 'any'} aria-label={a.label}
             className="mt-2 w-40 rounded-lg border border-line bg-surface px-2 py-1 text-sm tabular"
-            onBlur={(e) => { const v = Number(e.target.value); if (!Number.isNaN(v) && v !== a.value) onChange(a.key, v) }} />
+            onChange={(e) => setV(Number(e.target.value))}
+            onBlur={() => { if (!Number.isNaN(v) && v !== a.value) onChange(a.key, v) }} />
         )
       )}
     </li>

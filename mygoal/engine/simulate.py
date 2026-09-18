@@ -112,6 +112,7 @@ def simulate(base: Baseline, impacts: list[LeverImpact], market: Market, T: int,
     state = {"cash": np.full(N, base.cash), "invested": np.full(N, base.invested),
              "p3a": np.full(N, base.p3a), "p2": np.full(N, base.p2)}
     breach = np.zeros(N, dtype=bool)
+    pots = [np.zeros(N) for _ in comp.pots]         # committed investments, each with its own return and risk
     rec = {k: np.empty((T + 1, N), dtype=np.float32) for k in BUCKETS}
     for k in BUCKETS:
         rec[k][0] = state[k]
@@ -127,15 +128,33 @@ def simulate(base: Baseline, impacts: list[LeverImpact], market: Market, T: int,
             move = np.minimum(amount * price[t], np.maximum(state[src], 0.0))
             state[src] -= move
             state[dst] += move
+        for pot, (t0, once, monthly, _, _, src) in zip(pots, comp.pots):
+            if t < t0:
+                continue
+            add = np.zeros(N)
+            if t == t0 and once is not None:
+                add += np.minimum(once * price[t], np.maximum(state[src], 0.0))
+            if monthly is not None:
+                add += monthly * price[t]
+            state[src] -= add
+            pot += add
         for _, amount, order, caps, house_indexed in withdrawals_at.get(t, []):
             index = house[t] if house_indexed else price[t]
             need = amount * index
             for b in order:
-                avail = np.maximum(state[b], 0.0)
+                own = np.maximum(state[b], 0.0)
+                pooled = sum(pots) if (b == "invested" and pots) else 0.0     # committed investments can be sold too
+                avail = own + pooled
                 if caps.get(b) is not None:
                     avail = np.minimum(avail, caps[b] * index)
                 take = np.minimum(need, avail)
-                state[b] -= take
+                from_own = np.minimum(take, own)
+                state[b] -= from_own
+                if pots and b == "invested":
+                    rest = take - from_own
+                    total = np.maximum(pooled, 1e-9)
+                    for pot in pots:
+                        pot -= rest * pot / total
                 need = need - take
             state["cash"] -= need
 
@@ -144,12 +163,15 @@ def simulate(base: Baseline, impacts: list[LeverImpact], market: Market, T: int,
         state["invested"] *= ret_inv[t]
         state["p3a"] *= ret_3a[t]
         state["p2"] = state["p2"] * p2_up + p2_credit[t]
+        for pot, (_, _, _, mu, sd, _) in zip(pots, comp.pots):
+            pot *= np.exp(mu + sd * rb.z_market[t])
         sell = np.minimum(np.maximum(-state["cash"], 0.0), np.maximum(state["invested"], 0.0))
         state["invested"] -= sell
         state["cash"] += sell
-        breach |= (state["cash"] + state["invested"]) < spending[t]
+        pooled = sum(pots) if pots else 0.0
+        breach |= (state["cash"] + state["invested"] + pooled) < spending[t]
         for k in BUCKETS:
-            rec[k][t + 1] = state[k]
+            rec[k][t + 1] = state[k] + (pooled if k == "invested" else 0.0)
 
     one = np.ones((1, N))
     return Trajectories(start=base.start, T=T, N=N, cash=rec["cash"], invested=rec["invested"], p3a=rec["p3a"],

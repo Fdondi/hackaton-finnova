@@ -81,6 +81,19 @@ class AllocationDelta(BaseModel):
     label: str = ""
 
 
+class Investment(BaseModel):
+    """Money committed to one investment (a fund, stock trading, crypto), tracked as its own pot in every simulated
+    future with its own expected return and volatility; it moves with the market draws, scaled to its volatility.
+    It counts as invested money for goals, and a home purchase can draw on it."""
+    start: date
+    once: Dist | None = None                # today's CHF moved at start (up to what the source bucket holds)
+    monthly: Dist | None = None             # today's CHF moved each month from start
+    expected_return: float = 0.045          # per year
+    volatility: float = 0.10                # per year
+    from_bucket: Bucket = "cash"
+    label: str = ""
+
+
 class Withdrawal(BaseModel):
     """State-dependent: take `amount` from buckets in `order`, respecting per-bucket caps (CHF)."""
     at: date
@@ -110,6 +123,7 @@ class LeverImpact(BaseModel):
     shocks: list[Shock] = Field(default_factory=list)
     income_changes: list[IncomeDelta] = Field(default_factory=list)
     allocation_changes: list[AllocationDelta] = Field(default_factory=list)
+    investments: list[Investment] = Field(default_factory=list)
     withdrawals: list[Withdrawal] = Field(default_factory=list)
     goal_changes: list[GoalChange] = Field(default_factory=list)
     assumptions: list[Assumption] = Field(default_factory=list)

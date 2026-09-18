@@ -37,6 +37,11 @@ docker compose up --build        # picks up .env automatically
 #     (--format docker keeps the HEALTHCHECK; package downloads are cached between builds)
 ```
 
+**Investments.** The `invest` primitive (and "Put idle cash to work") puts money into its own pot in every simulated
+future, with its own expected return and volatility in % (editable in Details): the committed money is tracked
+separately from the rest of the portfolio, moves with the market draws scaled to its volatility, counts as invested
+money for goals and can fund a home purchase. The global portfolio return and volatility are editable on the facts page.
+
 **Languages.** UI strings live in `mygoal/explain/i18n/<lang>.yaml`; the engine writes English and
 `mygoal/explain/translate.py` translates its labels and sentences at the API boundary (`labels`, `label_patterns`,
 `unit_words` in the same YAML). AI-suggested goals are translated once per language.
@@ -61,13 +66,15 @@ OpenAI cloud runs with `reasoning_effort: none` because gpt-5.x rejects function
    simulated in the overview and affect other goals.
 2. **Main** (`pages/MainPage.tsx`, `mygoal/timeline.py`, `POST /timeline`): every confirmed goal on one chart. Spending
    goals take their money out at their date (a vertical drop), saving goals ("have X set aside", `kind: save`) and pension
-   money are locked in their own colors; each goal's chance counts the goals before it as paid. Only *accepted* actions
-   change the chart. A goal failing in more than `app.planning.alert_failure` (10%) of futures gets a red card: its
-   chance and expected shortfall, the engine's standard plan plus the AI's ad-hoc ideas (`POST /goals/{id}/ideas`,
-   validated primitives, kept only if the engine says they help), pre-selected and previewed until accepted; unticked
-   actions move to the bottom, the bin deletes them. Each what-if becomes a provisional card (accept or discard) and the
-   box is free again at once. "Move the date" suggests the June when 9 of 10 futures make it. Dates are years (goals
-   are June 1). **Pro mode** is the full dashboard (fan chart with a worst-to-best future slider, levers, risk, advisor).
+   money are locked in their own colors; each goal's chance counts the goals before it as paid. Goals are edited or
+   deleted right in the table. Actions are simply on or off and change the chart at once. The first goal failing in more
+   than `app.planning.alert_failure` (10%) of futures is in focus (click another failing goal to switch): its actions list
+   the engine's plan and the AI's ideas as **Recommended** (`POST /goals/{id}/ideas`, validated primitives, kept only if
+   they help), each with the points it adds to that goal's chance, best first, plus "Activate all recommended" and
+   "These actions raise your chances from X% to Y%" (green / yellow / red). "Move to 20xx" on a goal line adds a
+   `move:<goal>:<date>` action (the June when 9 of 10 futures make it). Each what-if is a provisional card (accept or
+   discard); the box is free again at once. Dates are years (goals are June 1). **Pro mode** is the full dashboard
+   (fan chart with a worst-to-best future slider, levers, risk, advisor).
 3. **Facts** ("See the data we're working with", `pages/FactsPage.tsx`, `mygoal/facts.py`): money in - out = free
    cash, life facts (known / assumed / you told us), assumptions about the future, every line editable (edits feed the
    engine: balances, income, housing and car costs, age and canton rebuild the profile); a chat at the

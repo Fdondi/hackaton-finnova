@@ -1,6 +1,6 @@
 import { ArrowLeft, Bot, Briefcase, Database, Languages, User } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api, type CrossGoalEffect, type GoalSpec, type Overrides, type Overview, type PlanResponse, type Timeline, type TimelineGoal } from './api'
+import { api, type CrossGoalEffect, type GoalSpec, type Overrides, type Overview, type PlanResponse, type Timeline } from './api'
 import { AdvisorView } from './components/AdvisorView'
 import { DataInsightsView } from './components/DataInsightsView'
 import { GoalCard } from './components/GoalCard'
@@ -13,7 +13,7 @@ import { WhyDrawer } from './components/WhyDrawer'
 import { I18nContext, useT, type Strings } from './i18n'
 import { FactsPage } from './pages/FactsPage'
 import { GoalsPage } from './pages/GoalsPage'
-import { MainPage, type GoalActions } from './pages/MainPage'
+import { MainPage } from './pages/MainPage'
 
 function stored(key: string, fallback: string) {
   try { return localStorage.getItem(key) ?? fallback } catch { return fallback }
@@ -75,7 +75,10 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
   const autoPlanned = useRef(new Set<string>())   // goals whose action plan we already pre-selected once
   const [timeline, setTimeline] = useState<Timeline | null>(null)
   const [whyId, setWhyId] = useState<string | null>(null)        // main page: Details of an action (always the fresh card)
-  const [actions, setActions] = useState<Record<string, GoalActions>>({})
+  const [listed, setListed] = useState<string[]>([])  // actions shown on the main page (recommended, AI, what-ifs, moves)
+  const listedRef = useRef<string[]>([])
+  listedRef.current = listed
+  const [focus, setFocus] = useState<string | null>(null)  // goal whose actions are shown (null: first failing)
   const deleted = useRef(new Set<string>())       // actions the client deleted: never listed again
   const [ideasLoading, setIdeasLoading] = useState<Record<string, boolean>>({})
   const ideasAsked = useRef(new Set<string>())    // goals whose AI ideas we already requested
@@ -98,83 +101,66 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
 
   useEffect(() => {
     setActive([]); setOverrides({}); setPlan(null); setTimeline(null); setPage('goals'); setView('client')
-    autoPlanned.current.clear(); ideasAsked.current.clear(); setIdeasLoading({}); setActions({}); deleted.current.clear(); setWhyId(null)
+    autoPlanned.current.clear(); ideasAsked.current.clear(); setIdeasLoading({}); setListed([]); setFocus(null); deleted.current.clear(); setWhyId(null)
   }, [clientId])
   useEffect(() => { if (page === 'pro') setOverrides((o) => ({ global: o.global ?? {} })) }, [goalId, page])
 
-  // Main page: every confirmed goal on one timeline, with the accepted actions only. For each goal at risk the proposal
-  // is listed and pre-selected (previewed, not applied), and the AI's ideas are fetched once and added the same way.
-  const previewKey = useMemo(() => JSON.stringify(Object.fromEntries(
-    Object.entries(actions).map(([g, a]) => [g, a.selected.filter((i) => !active.includes(i))]))), [actions, active])
-  const listedKey = useMemo(() => JSON.stringify([...new Set(Object.values(actions).flatMap((a) => a.shown))].sort()), [actions])
+  // Main page: every confirmed goal on one timeline with the actions that are on. The focus goal's recommended actions
+  // join the list (off until ticked); its AI ideas are fetched once and join the same way.
   useEffect(() => {
     if (!clientId || page !== 'main') return
     const ctrl = new AbortController()
     const timer = setTimeout(async () => {
       setLoading(true); setError(null)
       try {
-        const tl = await api.timeline(clientId, { active, overrides, lang, preview: JSON.parse(previewKey), listed: JSON.parse(listedKey) }, ctrl.signal)
+        const tl = await api.timeline(clientId, { active, overrides, lang, focus, listed: listedRef.current }, ctrl.signal)
         setTimeline(tl)
         setLoading(false)
-        setActions((cur) => {
-          let changed = false
-          const next = { ...cur }
-          for (const g of tl.goals.filter((x) => x.at_risk)) {
-            const a = next[g.id] ?? { shown: [], selected: [] }
-            const add = g.proposal.filter((i) => !a.shown.includes(i) && !deleted.current.has(i))
-            if (add.length || !next[g.id]) {
-              next[g.id] = { shown: [...a.shown, ...add], selected: [...a.selected, ...add.filter((i) => !active.includes(i))] }
-              changed = true
-            }
-          }
-          return changed ? next : cur
-        })
-        for (const g of tl.goals.filter((x) => x.at_risk && !ideasAsked.current.has(x.id))) {
-          ideasAsked.current.add(g.id)
-          setIdeasLoading((st) => ({ ...st, [g.id]: true }))
-          api.goalIdeas(clientId, g.id, lang).then((r) => {
+        const rec = (tl.actions?.recommended ?? []).filter((i) => !deleted.current.has(i))
+        setListed((cur) => (rec.some((i) => !cur.includes(i)) ? [...cur, ...rec.filter((i) => !cur.includes(i))] : cur))
+        const g = tl.actions?.goal_id
+        if (g && !ideasAsked.current.has(g)) {
+          ideasAsked.current.add(g)
+          setIdeasLoading((st) => ({ ...st, [g]: true }))
+          api.goalIdeas(clientId, g, lang).then((r) => {
             if (!r.ids.length) return
-            setActions((cur) => {
-              const a = cur[g.id] ?? { shown: [], selected: [] }
-              const add = r.ids.filter((i) => !a.shown.includes(i))
-              return { ...cur, [g.id]: { shown: [...a.shown, ...add], selected: [...a.selected, ...add] } }
-            })
+            setListed((cur) => [...cur, ...r.ids.filter((i) => !cur.includes(i))])
             setVersion((v) => v + 1)
-          }).catch(() => {}).finally(() => setIdeasLoading((st) => ({ ...st, [g.id]: false })))
+          }).catch(() => {}).finally(() => setIdeasLoading((st) => ({ ...st, [g]: false })))
         }
       } catch (e) {
         if (!ctrl.signal.aborted) { setError(String(e)); setLoading(false) }
       }
     }, 150)
     return () => { clearTimeout(timer); ctrl.abort() }
-  }, [clientId, active, overrides, lang, version, page, previewKey, listedKey])
+  }, [clientId, active, overrides, lang, version, page, focus])
 
-  const accept = useCallback((ids: string[]) => {
-    setActive((a) => [...a, ...ids.filter((i) => !a.includes(i))])
-    setActions((cur) => Object.fromEntries(Object.entries(cur).map(([g, a]) => [g, { ...a, selected: a.selected.filter((i) => !ids.includes(i)) }])))
-  }, [])
-  const unaccept = useCallback((id: string) => setActive((a) => a.filter((x) => x !== id)), [])
-  const selectAction = useCallback((goal: string, id: string, on: boolean) => setActions((cur) => {
-    const a = cur[goal] ?? { shown: [], selected: [] }
-    return { ...cur, [goal]: { ...a, selected: on ? [...a.selected.filter((x) => x !== id), id] : a.selected.filter((x) => x !== id) } }
-  }), [])
-  const deleteAction = useCallback((goal: string, id: string) => {
+  const activateAll = useCallback((ids: string[]) => setActive((a) => [...a, ...ids.filter((i) => !a.includes(i))]), [])
+  const deleteAction = useCallback((id: string) => {
     deleted.current.add(id)
     setActive((a) => a.filter((x) => x !== id))
-    setActions((cur) => {
-      const a = cur[goal] ?? { shown: [], selected: [] }
-      return { ...cur, [goal]: { shown: a.shown.filter((x) => x !== id), selected: a.selected.filter((x) => x !== id) } }
-    })
+    setListed((l) => l.filter((x) => x !== id))
     if (id.startsWith('whatif:') && clientId) api.removeLever(clientId, id).then(() => setVersion((v) => v + 1)).catch(() => {})
+    else setVersion((v) => v + 1)
   }, [clientId])
-  const acceptWhatIf = useCallback((goal: string, id: string) => {
-    setActions((cur) => {
-      const a = cur[goal] ?? { shown: [], selected: [] }
-      return { ...cur, [goal]: { ...a, shown: a.shown.includes(id) ? a.shown : [...a.shown, id] } }
-    })
+  const addAction = useCallback((id: string) => {           // a what-if the client accepted, or "move later"
+    setListed((l) => (l.includes(id) ? l : [...l, id]))
     setActive((a) => (a.includes(id) ? a : [...a, id]))
     setVersion((v) => v + 1)
   }, [])
+  const saveGoal = useCallback(async (g: GoalSpec) => {
+    if (!clientId) return
+    const { status_info: _drop, ...goal } = g as GoalSpec & { status_info?: unknown }
+    void _drop
+    await api.upsertGoal(clientId, goal)
+    setVersion((v) => v + 1)
+  }, [clientId])
+  const deleteGoal = useCallback(async (goalId: string) => {
+    if (!clientId) return
+    await api.deleteGoal(clientId, goalId)
+    setActive((a) => a.filter((x) => !x.startsWith(`move:${goalId}:`)))
+    setVersion((v) => v + 1)
+  }, [clientId])
 
   // Re-simulate on every change (main and pro pages); hold the previous render (dimmed) while the new one loads.
   useEffect(() => {
@@ -209,16 +195,6 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
     })
   }, [])
   const addLever = useCallback((id: string) => { setActive((a) => (a.includes(id) ? a : [...a, id])); setVersion((v) => v + 1) }, [])
-  const moveGoal = useCallback(async (g: TimelineGoal) => {
-    const spec = overview?.goals.find((x) => x.id === g.id)
-    if (!clientId || !spec || !g.move_to) return
-    const { status_info: _drop, ...goal } = spec
-    void _drop
-    await api.upsertGoal(clientId, g.type === 'retirement'
-      ? { ...goal, params: { ...goal.params, retirement_age: g.move_to.retirement_age ?? goal.params.retirement_age } }
-      : { ...goal, target_date: g.move_to.date })
-    setVersion((v) => v + 1)
-  }, [clientId, overview])
   const openFacts = () => { setFactsFrom(page); setPage('facts') }
 
   const whyLever = useMemo(() => (why && why !== 'global' ? plan?.levers.find((l) => l.lever_id === why) : undefined), [why, plan])
@@ -281,9 +257,9 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
       ) : !planReady ? (
         <div className="p-10 text-ink-2">{t('ui.thinking', {}, 'Loading…')}</div>
       ) : page === 'main' ? (
-        <MainPage clientId={clientId} tl={timeline!} active={active} actions={actions} loading={loading} ideasLoading={ideasLoading}
-          onAccept={accept} onUnaccept={unaccept} onSelect={selectAction} onDelete={deleteAction} onDetails={setWhyId}
-          onLever={acceptWhatIf} onMove={moveGoal}
+        <MainPage clientId={clientId} tl={timeline!} goals={confirmed} active={active} listed={listed} loading={loading} ideasLoading={ideasLoading}
+          onToggle={toggle} onActivateAll={activateAll} onDelete={deleteAction} onDetails={setWhyId} onLever={addAction}
+          onFocus={setFocus} onSaveGoal={saveGoal} onDeleteGoal={deleteGoal}
           onPro={() => setPage('pro')} onFacts={openFacts} onGoals={() => setPage('goals')} />
       ) : (
         <main className="mx-auto max-w-7xl space-y-4 px-4 py-4">

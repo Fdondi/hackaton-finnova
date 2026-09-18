@@ -46,12 +46,20 @@ export interface TimelineGoal {
   p_base: number
   p: number
   at_risk: boolean
-  proposal: string[]
-  p_proposal: number | null
-  move_to: { date: string; retirement_age: number | null } | null
+  moved: boolean
   shortfall: number | null
-  p_preview: number | null
-  shortfall_preview: number | null
+  move_to: { date: string; action: string; retirement_age: number | null } | null
+}
+
+/** Actions for the goal in focus (the first failing one, or the one picked): recommended ids and each action's gain. */
+export interface TimelineActions {
+  goal_id: string
+  goal_label: string
+  goal_date: string
+  recommended: string[]
+  gains: Record<string, number>
+  p_from: number
+  p_to: number
 }
 
 /** All confirmed goals on one chart (mygoal/timeline.py). */
@@ -64,8 +72,10 @@ export interface Timeline {
   start: string
   end: string
   goals: TimelineGoal[]
+  actions: TimelineActions | null
   cards: Record<string, LeverCard>
   alert_failure: number
+  success_threshold: number
 }
 
 export interface Fact {
@@ -345,8 +355,8 @@ export const api = {
   advisor: (client: string, goal: string, lang: string) => call<AdvisorAgenda>(`/clients/${client}/advisor?goal_id=${goal}&lang=${lang}`),
   goals: (client: string, lang = 'en') => call<GoalSpec[]>(`/clients/${client}/goals?lang=${lang}`),
   deleteGoal: (client: string, goal: string) => call<GoalSpec[]>(`/clients/${client}/goals/${goal}`, { method: 'DELETE' }),
-  suggestGoals: (client: string, lang: string) =>
-    call<GoalSpec[]>(`/clients/${client}/goals/suggest`, { method: 'POST', body: JSON.stringify({ lang }) }),
+  suggestGoals: (client: string, lang: string, more = false) =>
+    call<GoalSpec[]>(`/clients/${client}/goals/suggest`, { method: 'POST', body: JSON.stringify({ lang, more }) }),
   draftGoal: (client: string, body: { text: string; lang: string; question?: string; answer?: string }) =>
     call<DraftResult>(`/clients/${client}/goals/draft`, { method: 'POST', body: JSON.stringify(body) }),
   facts: (client: string, overrides: Overrides, lang: string) =>
@@ -357,7 +367,7 @@ export const api = {
     call<{ reply: string; changed: string[]; overrides: Overrides; facts: Facts }>(`/clients/${client}/facts/chat`,
       { method: 'POST', body: JSON.stringify({ message, overrides, lang }) }),
   factsReading: (client: string, lang: string) => call<FactsReading>(`/clients/${client}/facts/ai?lang=${lang}`),
-  timeline: (client: string, body: { active: string[]; overrides: Overrides; lang: string; preview?: Record<string, string[]>; listed?: string[] }, signal?: AbortSignal) =>
+  timeline: (client: string, body: { active: string[]; overrides: Overrides; lang: string; focus?: string | null; listed?: string[] }, signal?: AbortSignal) =>
     call<Timeline>(`/clients/${client}/timeline`, { method: 'POST', body: JSON.stringify(body), signal }),
   goalIdeas: (client: string, goal: string, lang: string) =>
     call<{ ids: string[] }>(`/clients/${client}/goals/${goal}/ideas`, { method: 'POST', body: JSON.stringify({ lang }) }),

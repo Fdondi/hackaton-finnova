@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("mygoal.facts")
 
-FUTURE_KEYS = ["job_loss_prob", "buffer_months", "inflation", "real_wage_growth", "portfolio_return",
+FUTURE_KEYS = ["job_loss_prob", "buffer_months", "inflation", "real_wage_growth", "portfolio_return", "portfolio_volatility",
                "house_price_growth", "cash_rate"]
 
 

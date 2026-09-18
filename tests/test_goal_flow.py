@@ -81,7 +81,7 @@ def _timeline_with_car(fresh):
     return timeline, car, fund
 
 
-def test_timeline_spends_vertically_locks_savings_and_previews_without_touching_the_chart(fresh):
+def test_timeline_spends_vertically_locks_savings_and_actions_move_the_chances(fresh):
     timeline, car, fund = _timeline_with_car(fresh)
     tl = timeline.build(fresh, "lena", [], {}, "en")
     d = [str(x) for x in tl["dates"]]
@@ -90,13 +90,18 @@ def test_timeline_spends_vertically_locks_savings_and_previews_without_touching_
     assert tl["free"][i] - tl["free"][i + 1] > 25_000                                     # the car money leaves at once
     j = d.index(str(fund.target_date))
     assert tl["locked"][j] == 0 and tl["locked"][j + 1] > 19_000                          # the fund is locked, not spent
-    risky = [g for g in tl["goals"] if g["at_risk"]]
-    if risky:
-        g = risky[0]
-        prev = timeline.build(fresh, "lena", [], {}, "en", preview={g["id"]: g["proposal"]})
-        assert prev["free"] == tl["free"]                                                  # preview: chart unchanged
-        acc = timeline.build(fresh, "lena", g["proposal"], {}, "en")
-        assert next(x for x in acc["goals"] if x["id"] == g["id"])["p"] >= g["p"]
+    act = tl["actions"]
+    if act:                                                       # the first failing goal is in focus
+        focus = next(g for g in tl["goals"] if g["id"] == act["goal_id"])
+        assert focus["at_risk"] and set(act["recommended"]) <= set(act["gains"])
+        on = timeline.build(fresh, "lena", act["recommended"], {}, "en")
+        assert on["free"] != tl["free"]                           # active actions change the chart at once
+        assert next(g for g in on["goals"] if g["id"] == focus["id"])["p"] >= focus["p"]
+        if focus["move_to"]:
+            mv = focus["move_to"]["action"]
+            moved = timeline.build(fresh, "lena", [mv], {}, "en", listed=[mv])
+            row = next(g for g in moved["goals"] if g["id"] == focus["id"])
+            assert row["moved"] and str(row["date"]) == str(focus["move_to"]["date"]) and row["p"] > focus["p"]
 
 
 def test_german_translates_engine_texts_and_english_passes_through():
@@ -109,16 +114,24 @@ def test_german_translates_engine_texts_and_english_passes_through():
     assert tr_unit("CHF/month", "de") == "CHF/Monat"
 
 
-def test_an_investment_strategy_changes_return_and_risk(fresh):
-    import dataclasses
+def test_an_investment_is_its_own_pot_with_its_own_return_and_risk(fresh):
     import numpy as np
     from mygoal.engine import simulate
+    from mygoal.levers.primitives import build_primitive
+    goal = fresh.goal("lena", "home")
     base, market, _ = fresh.baseline("lena")
-    base = base.model_copy(update={"invested": 50_000.0})
-    impact = fresh.levers("lena", fresh.goal("lena", "home"), base, {})[0].model_copy(
-        update={"settings": {"portfolio_return": 0.10, "portfolio_volatility": 0.35}, "recurring": [], "one_offs": [],
-                "income_changes": [], "allocation_changes": [], "goal_changes": [], "shocks": []})
-    calm = simulate(base, [], market, 120, 1000, 3)
-    wild = simulate(base, [impact], dataclasses.replace(market), 120, 1000, 3)
+    ctx = fresh.lever_context("lena", goal, base, {})
+
+    def run(r, vol):
+        lv = build_primitive("invest", {"title": "Trade stocks", "amount_once": {"value": 20000, "label": "Put in", "source": "user"},
+                                        "expected_return": {"value": r, "label": "Return", "source": "user"},
+                                        "volatility": {"value": vol, "label": "Volatility", "source": "user"}}, ctx, "whatif:t")
+        return lv, simulate(base, [lv], market, 60, 1000, 3)
+
+    lv, calm = run(0.05, 0.05)
+    _, wild = run(10, 35)                                    # "10" and "35" are read as 10% and 35%
+    assert {a.unit for a in lv.assumptions if a.key in ("expected_return", "volatility")} == {"%/yr"}
+    none = simulate(base, [], market, 60, 1000, 3)
+    assert float(np.median(calm.invested[-1] - none.invested[-1])) > 20000   # the pot counts as invested money
     spread = lambda tr_: float(np.percentile(tr_.invested[-1], 90) - np.percentile(tr_.invested[-1], 10))  # noqa: E731
-    assert spread(wild) > spread(calm)
+    assert spread(wild) > 2 * spread(calm)

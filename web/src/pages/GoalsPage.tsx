@@ -128,6 +128,12 @@ export function GoalsPage({ clientId, name, onContinue, onFacts }: {
               </span>
             )}
             {!thinking && suggested.length === 0 && <span className="text-sm text-muted">–</span>}
+            {!thinking && (
+              <button onClick={() => { setThinking(true); apply(api.suggestGoals(clientId, lang, true).then(() => api.goals(clientId, lang))).finally(() => setThinking(false)) }}
+                className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-dashed border-llm/50 px-3 py-1 text-sm text-llm hover:bg-llm-wash">
+                <Sparkles size={13} />{t('flow.more_suggestions', {}, 'Generate more suggestions')}
+              </button>
+            )}
           </div>
         </aside>
 

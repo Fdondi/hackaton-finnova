@@ -66,6 +66,7 @@ class AnswerRequest(BaseModel):
 class LangRequest(BaseModel):
     lang: str = "en"
     use_llm: bool = True
+    more: bool = False                            # "generate more suggestions": ask the AI again
 
 
 class DraftRequest(BaseModel):
@@ -76,9 +77,9 @@ class DraftRequest(BaseModel):
 
 
 class TimelineRequest(BaseModel):
-    active: list[str] = []                        # accepted actions: they change the chart and the chances
-    preview: dict[str, list[str]] = {}            # goal id -> selected, not yet accepted actions (previewed only)
-    listed: list[str] = []                        # every action the page lists (cards come back even if unticked)
+    active: list[str] = []                        # actions that are on (incl. "move:<goal>:<date>")
+    focus: str | None = None                      # the goal whose actions the page shows (default: first failing)
+    listed: list[str] = []                        # every action the page lists (cards and gains come back even if off)
     overrides: dict[str, dict[str, float]] = {}
     lang: str = "en"
 
@@ -168,7 +169,7 @@ def suggest_goals(client_id: str, req: LangRequest):
     """Rules on the data plus (once per client) the LLM's ideas, added as suggested goals."""
     _client(client_id)
     from ..agent.goal_assistant import suggest
-    suggest(svc(), client_id, req.lang, use_llm=req.use_llm)
+    suggest(svc(), client_id, req.lang, use_llm=req.use_llm, more=req.more)
     return svc().localized_goals(client_id, req.lang)
 
 
@@ -185,7 +186,7 @@ def timeline(client_id: str, req: TimelineRequest):
     """All confirmed goals on one chart, each goal's chance, and a proposal for the ones at risk."""
     _client(client_id)
     from .. import timeline as tl
-    return tl.build(svc(), client_id, req.active, req.overrides, req.lang, req.preview, req.listed)
+    return tl.build(svc(), client_id, req.active, req.overrides, req.lang, req.focus, req.listed)
 
 
 @app.post("/api/clients/{client_id}/goals/{goal_id}/ideas")

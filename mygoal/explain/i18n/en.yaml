@@ -184,3 +184,6 @@ ui:
   trade_off: "Trade-off"
   in_plan: "In suggested plan"
   thinking: "Working on it…"
+
+actions:
+  move: "Move “{label}” to {year}"

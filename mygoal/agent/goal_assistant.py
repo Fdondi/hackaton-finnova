@@ -127,11 +127,11 @@ def rule_suggestions(svc: "PlanningService", client_id: str) -> list[dict]:
     return out
 
 
-def suggest(svc: "PlanningService", client_id: str, lang: str = "en", use_llm: bool = True) -> list[GoalSpec]:
+def suggest(svc: "PlanningService", client_id: str, lang: str = "en", use_llm: bool = True, more: bool = False) -> list[GoalSpec]:
     """Add suggestions to the client's goal list (rules always, the LLM once per client). Returns the full list."""
     st = svc.state(client_id)
     with st.lock:           # a second call waits for the first one's LLM ideas instead of returning without them
-        goals = _suggest(svc, client_id, st, lang, use_llm)
+        goals = _suggest(svc, client_id, st, lang, use_llm, more)
         if use_llm:
             _translate_ai_goals(svc, st, lang)
         return goals
@@ -174,7 +174,7 @@ def _same_idea(a: GoalSpec, b: GoalSpec) -> bool:
     return bool(words(a) & words(b))
 
 
-def _suggest(svc: "PlanningService", client_id: str, st, lang: str, use_llm: bool) -> list[GoalSpec]:
+def _suggest(svc: "PlanningService", client_id: str, st, lang: str, use_llm: bool, more: bool = False) -> list[GoalSpec]:
     as_of, canton = st.profile.as_of, st.ds.client.canton
     def key(g: dict | GoalSpec) -> tuple:
         get = g.get if isinstance(g, dict) else lambda k, default=None: getattr(g, k, None) or g.params.get(k, default)
@@ -187,10 +187,11 @@ def _suggest(svc: "PlanningService", client_id: str, st, lang: str, use_llm: boo
 
     known = {key(g) for g in st.goals}
     ideas: list[tuple[dict, str]] = [(d, "data") for d in rule_suggestions(svc, client_id)]
-    llm = get_llm(svc.cfg) if use_llm and not st.ai_suggested else None
+    llm = get_llm(svc.cfg) if use_llm and (more or not st.ai_suggested) else None
+    cap = 6 + (4 if more else 0) + sum(1 for g in st.goals if g.status == "suggested") * (1 if more else 0)
     if llm is not None:
         st.ai_suggested = True
-        existing = ", ".join(g.label for g in st.goals) or "none"
+        existing = ", ".join([g.label for g in st.goals] + [label for _, label in st.dismissed]) or "none"
         system = SUGGEST_SYSTEM.format(n=4, existing=existing, language="German" if lang == "de" else "English",
                                        types=json.dumps(GOAL_TYPES))
         try:
@@ -199,7 +200,7 @@ def _suggest(svc: "PlanningService", client_id: str, st, lang: str, use_llm: boo
             log.warning("goal suggestions failed: %s", exc)
     for d, origin in ideas:
         if key(d) in known or (d.get("type"), str(d.get("label") or "").lower()) in st.dismissed \
-                or len([g for g in st.goals if g.status == "suggested"]) >= 6:
+                or len([g for g in st.goals if g.status == "suggested"]) >= cap:
             continue
         try:
             g = to_goal(d, as_of, canton, {x.id for x in st.goals}, origin)

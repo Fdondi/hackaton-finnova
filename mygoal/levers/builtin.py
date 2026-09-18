@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 
-from ..model import AllocationDelta, GoalChange, LeverImpact, RecurringDelta, add_months, fixed
+from ..model import AllocationDelta, GoalChange, Investment, LeverImpact, RecurringDelta, add_months, fixed
 from ..swiss import fmt_chf, marginal_tax_rate
 from .base import LeverContext, lever
 
@@ -29,15 +29,15 @@ def invest_idle_cash(ctx: LeverContext):
     monthly = a.get("monthly", max(0.0, round(0.5 * fcf, -2)), label="Monthly investment plan", source="transactions",
                     unit="CHF/month", low=0, high=max(0.0, round(fcf, -2)), step=50, note="Half of what you save each month today")
     r = a.get("expected_return", r, label=f"Expected return ({portfolio})", unit="%/yr", source="market_default",
-              low=0.0, high=0.1, step=0.005)
-    settings = {"portfolio": portfolio, **({"portfolio_return": r} if "expected_return" in a.overrides else {})}
+              low=0.0, high=0.12, step=0.005)
+    vol = a.get("volatility", vol, label=f"Volatility ({portfolio})", unit="%/yr", source="market_default",
+                low=0.0, high=0.5, step=0.01)
     return LeverImpact(
         lever_id="invest_idle_cash", title="Put idle cash to work",
         description=f"Invest {fmt_chf(amount)} in a {portfolio} portfolio and {fmt_chf(monthly)}/month through a savings plan.",
         group="no_lifestyle_cost", effort="low", confidence="estimated", product_trigger="investment_plan", icon="trending-up",
-        allocation_changes=[AllocationDelta(start=ctx.start, to_bucket="invested", mode="once", amount=fixed(amount), label="Lump sum"),
-                            *([AllocationDelta(start=ctx.start, to_bucket="invested", mode="monthly", amount=fixed(monthly), label="Savings plan")] if monthly > 0 else [])],
-        settings=settings,
+        investments=[Investment(start=ctx.start, once=fixed(amount) if amount else None, monthly=fixed(monthly) if monthly > 0 else None,
+                                expected_return=r, volatility=vol, label=f"{portfolio} portfolio")],
         headline_monthly=round((amount + monthly * min(ctx.months_to_target, 60) / 2) * (r - ctx.cfg["market"]["cash_rate"]) / 12),
         side_effects=[f"Value moves with markets: a bad year can be about -{2 * vol:.0%}"],
         assumptions=a.list(),

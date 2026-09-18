@@ -13,7 +13,8 @@ from typing import Callable, Literal
 from pydantic import BaseModel, Field
 
 from ..model import (
-    AllocationDelta, AssumptionBook, ContingentOneOff, GoalChange, IncomeDelta, LeverImpact, OneOff, RecurringDelta, Shock,
+    AllocationDelta, AssumptionBook, ContingentOneOff, GoalChange, IncomeDelta, Investment, LeverImpact, OneOff, RecurringDelta,
+    Shock,
     add_months, fixed, lognormal, triangular,
 )
 from ..model.assumptions import Source
@@ -115,10 +116,16 @@ class Reallocate(Base):
     to_bucket: Literal["cash", "invested", "p3a", "p2"] = "invested"
     once_amount: Estimate | None = None
     monthly_amount: Estimate | None = None
-    expected_return: Estimate | None = Field(None, description="Investing: expected yearly return as a share, e.g. 0.10; "
-                                             "set with volatility for a strategy (stock trading, crypto, a fund)")
-    volatility: float | None = Field(None, description="Investing: yearly volatility as a share, e.g. 0.15 index fund, "
-                                     "0.35 active stock trading, 0.7 crypto")
+
+
+class Invest(Base):
+    amount_once: Estimate | None = Field(None, description="CHF put into this investment now, from cash")
+    amount_monthly: Estimate | None = Field(None, description="CHF per month put into it from now on")
+    expected_return: Estimate = Field(description="Expected yearly return as a share (0.05 = 5%): index fund ~0.05, "
+                                      "active stock trading ~0.08, crypto ~0.10")
+    volatility: Estimate = Field(description="Yearly volatility as a share (0.15 = 15%): index fund ~0.15, "
+                                 "active stock trading ~0.35, crypto ~0.7")
+    in_months: int = 0
 
 
 class GoalChangePrimitive(Base):
@@ -264,13 +271,29 @@ def reallocate(p: Reallocate, ctx: LeverContext, lever_id: str, book: Assumption
     if p.monthly_amount is not None:
         v = p.monthly_amount.read(book, "monthly_amount")
         allocs.append(AllocationDelta(start=ctx.start, from_bucket=p.from_bucket, to_bucket=p.to_bucket, mode="monthly", amount=fixed(v)))
-    settings: dict = {}
-    if p.to_bucket == "invested" and p.expected_return is not None:   # the invested money follows this strategy
-        settings["portfolio_return"] = p.expected_return.read(book, "expected_return")
-    if p.to_bucket == "invested" and p.volatility is not None:
-        settings["portfolio_volatility"] = book.get("volatility", float(p.volatility), label="Volatility of the strategy",
-                                                    unit="%/yr", source="llm_estimate", low=0.0, high=1.0, step=0.05)
-    return _impact(p, lever_id, book, confidence="estimated", allocation_changes=allocs, settings=settings)
+    return _impact(p, lever_id, book, confidence="estimated", allocation_changes=allocs)
+
+
+def _share(e: Estimate, low: float, high: float) -> Estimate:
+    """A yearly rate in %: accept 10 as well as 0.10, show it as a percentage (not CHF), always with a slider range."""
+    scale = 100.0 if abs(e.value) > 1.5 else 1.0
+    v = e.value / scale
+    return e.model_copy(update={"value": v, "unit": "%/yr",
+                                "low": min(v, low) if e.low is None else e.low / scale,
+                                "high": max(v, high) if e.high is None else e.high / scale})
+
+
+@primitive("invest", Invest, "Invest money with its own return and risk (a fund, stock trading, crypto): tracked as its "
+           "own pot; the risk widens the range of outcomes.")
+def invest(p: Invest, ctx: LeverContext, lever_id: str, book: AssumptionBook) -> LeverImpact:
+    r0 = p.expected_return.value / (100.0 if abs(p.expected_return.value) > 1.5 else 1.0)
+    r = _share(p.expected_return, r0 - 0.10, r0 + 0.10).read(book, "expected_return")
+    vol = max(0.0, _share(p.volatility, 0.0, 0.8).read(book, "volatility"))
+    once = p.amount_once.read(book, "amount_once") if p.amount_once is not None else 0.0
+    monthly = p.amount_monthly.read(book, "amount_monthly") if p.amount_monthly is not None else 0.0
+    inv = Investment(start=add_months(ctx.start, p.in_months), once=fixed(once) if once else None,
+                     monthly=fixed(monthly) if monthly else None, expected_return=r, volatility=vol, label=p.title)
+    return _impact(p, lever_id, book, confidence="estimated", investments=[inv])
 
 
 @primitive("goal_change", GoalChangePrimitive, "Change the goal itself: cheaper home, smaller amount, later date.")

@@ -24,6 +24,8 @@ class Compiled:
     transfers: list[tuple[int, str, str, np.ndarray]] = field(default_factory=list)
     withdrawals: list[tuple[int, np.ndarray, list[str], dict[str, float], bool]] = field(default_factory=list)
     settings: dict = field(default_factory=dict)
+    # investments tracked as their own pots: (start month, once (N,) | None, monthly (N,) | None, mu, sd, source bucket)
+    pots: list[tuple[int, np.ndarray | None, np.ndarray | None, float, float, str]] = field(default_factory=list)
 
 
 def _span(start: date, s: date, e: date | None, T: int) -> tuple[int, int]:
@@ -95,6 +97,16 @@ def compile_impacts(impacts: list[LeverImpact], start: date, T: int, N: int, see
                     c.transfers.extend((t, a.from_bucket, a.to_bucket, vals) for t in range(t0, t1))
             else:
                 c.transfers.append((t0, a.from_bucket, a.to_bucket, a.amount.sample(rng, N)))
+        for inv in lever.investments:
+            k += 1
+            t0 = max(0, months_between(start, inv.start))
+            if t0 >= T:
+                continue
+            rng = stream(seed, lever.lever_id, k)
+            sd = inv.volatility / np.sqrt(12)
+            mu = np.log(1 + inv.expected_return) / 12 - 0.5 * sd * sd
+            c.pots.append((t0, inv.once.sample(rng, N) if inv.once is not None else None,
+                           inv.monthly.sample(rng, N) if inv.monthly is not None else None, float(mu), float(sd), inv.from_bucket))
         for o in lever.one_offs:
             k += 1
             t = months_between(start, o.at)

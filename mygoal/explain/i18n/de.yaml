@@ -204,6 +204,19 @@ lever_titles:
   lower_retirement_spending: "Pension mit {amount}/Monat planen"
 
 flow:
+  recommended: "Empfohlen"
+  activate_all: "Alle Empfehlungen aktivieren"
+  actions_for: "Was helfen würde: {goal} ({year})"
+  chances_raise: "Diese Massnahmen erhöhen Ihre Chancen von {from} auf {to}."
+  chances_now: "Chance heute: {pct}. Schalten Sie Massnahmen ein, um sie zu erhöhen."
+  pts: "Pkt."
+  gain_hint: "Veränderung der Chance, dieses Ziel zu erreichen"
+  moved: "verschoben"
+  move_later: "Auf {when} verschieben"
+  move_hint: "9 von 10 Zukünften schaffen es bis dann"
+  add_goals: "Ziele hinzufügen"
+  active_only: "Enthält die eingeschalteten Massnahmen."
+  more_suggestions: "Weitere Vorschläge erzeugen"
   suggestions: "Vorschläge für Sie"
   your_goals_list: "Ihre Ziele"
   year: "Jahr"
@@ -351,6 +364,9 @@ labels:
   "Variable spending per month": "Variable Ausgaben pro Monat"
   "Volatility, balanced portfolio": "Volatilität, ausgewogenes Portfolio"
   "Volatility of the strategy": "Volatilität der Strategie"
+  "Volatility (balanced)": "Volatilität (ausgewogen)"
+  "Volatility (conservative)": "Volatilität (konservativ)"
+  "Volatility (growth)": "Volatilität (wachstumsorientiert)"
   "Wedding costs": "Hochzeitskosten"
   "Wedding in": "Hochzeit in"
   "What the car costs you per month": "Was Sie das Auto pro Monat kostet"
@@ -470,3 +486,6 @@ unit_words:
   "months of fixed costs": "Monate Fixkosten"
   "per year": "pro Jahr"
   "years": "Jahre"
+
+actions:
+  move: "„{label}“ auf {year} verschieben"

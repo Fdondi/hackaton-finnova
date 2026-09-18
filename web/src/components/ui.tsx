@@ -1,5 +1,5 @@
 import {
-  Baby, Briefcase, Building2, Car, CircleX, Heart, HeartPulse, House, Landmark, Scissors, Sparkles, Split, Target, TrendingUp,
+  Baby, Briefcase, Building2, CalendarClock, Car, CircleX, Heart, HeartPulse, House, Landmark, Scissors, Sparkles, Split, Target, TrendingUp,
   type LucideIcon,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
@@ -53,7 +53,7 @@ export function SourceBadge({ source, label }: { source: Source; label: string }
 const ICONS: Record<string, LucideIcon> = {
   'trending-up': TrendingUp, landmark: Landmark, 'x-circle': CircleX, scissors: Scissors, building: Building2,
   home: House, target: Target, car: Car, 'heart-pulse': HeartPulse, baby: Baby, heart: Heart, split: Split,
-  briefcase: Briefcase,
+  briefcase: Briefcase, calendar: CalendarClock,
 }
 
 export function LeverIcon({ name, origin }: { name: string | null; origin: string }) {

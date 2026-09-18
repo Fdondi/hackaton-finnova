@@ -1,7 +1,8 @@
-import { CalendarPlus, Check, CircleCheck, Database, FileText, Gauge, House, LoaderCircle, Lock, Pencil, PiggyBank, Sparkles, Target, Trash2, TreePalm, TriangleAlert } from 'lucide-react'
-import { useMemo } from 'react'
+import { CalendarClock, CircleCheck, Database, FileText, Gauge, House, LoaderCircle, Lock, Pencil, PiggyBank, Sparkles, Star, Target, Trash2, TreePalm, TriangleAlert, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import type { LeverCard, Timeline, TimelineGoal } from '../api'
+import type { GoalSpec, LeverCard, Timeline, TimelineGoal } from '../api'
+import { GoalEditor } from '../components/GoalEditor'
 import { useTokens } from '../components/tokens'
 import { WhatIfBox } from '../components/WhatIfBox'
 import { Card, LeverIcon, Pill } from '../components/ui'
@@ -15,7 +16,7 @@ const ts = (iso: string) => Date.parse(iso)
 interface Row { x: number; pension: number; locked: number; available: number; low: number }
 
 /** All goals on one timeline: spending goals take their money out, saving goals and pension money are locked.
- *  Only accepted actions are in it. Drops and locks are vertical: each goal date comes twice (before / after). */
+ *  Only active actions are in it. Drops and locks are vertical: each goal date comes twice (before / after). */
 function GoalsChart({ tl }: { tl: Timeline }) {
   const { t } = useT()
   const c = useTokens()
@@ -69,162 +70,154 @@ function GoalsChart({ tl }: { tl: Timeline }) {
         <span className="inline-flex items-center gap-1.5"><span className="h-3 w-4 rounded-sm" style={{ background: violet, opacity: 0.55 }} />{t('flow.locked_goals', {}, 'Set aside for goals')}</span>
         <span className="inline-flex items-center gap-1.5"><span className="h-3 w-4 rounded-sm bg-muted/40" />{t('flow.pension_locked', {}, 'Pension (locked)')}</span>
         <span className="inline-flex items-center gap-1.5"><span className="w-4 border-t border-dashed border-accent" />{t('flow.bad_case', {}, 'Bad case (1 in 10)')}</span>
-        <span className="text-muted">{t('flow.accepted_only', {}, 'Includes only the actions you accepted.')}</span>
+        <span className="text-muted">{t('flow.active_only', {}, 'Includes the actions that are switched on.')}</span>
       </div>
     </div>
   )
 }
 
-type State = 'accepted' | 'selected' | 'off'
+/** One goal line: status, edit / delete in place, "move later", click to focus its actions. */
+function GoalLine({ g, spec, tl, focused, onFocus, onSave, onDelete, onMoveLater }: {
+  g: TimelineGoal; spec: GoalSpec | undefined; tl: Timeline; focused: boolean; onFocus: () => void
+  onSave: (goal: GoalSpec) => void; onDelete: () => void; onMoveLater: () => void
+}) {
+  const { t, months } = useT()
+  const [editing, setEditing] = useState(false)
+  const Icon = g.type === 'home' ? House : ICON[g.kind]
+  const bad = 1 - g.p > tl.alert_failure
+  return (
+    <li className={`py-2 ${focused ? 'bg-critical/5' : ''}`}>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1">
+        <Icon size={16} className="text-ink-2" />
+        <button onClick={g.at_risk ? onFocus : undefined} className={`font-medium ${g.at_risk ? 'hover:underline' : 'cursor-default'}`}>{g.label}</button>
+        <span className="text-ink-2">{g.type === 'retirement' ? t('flow.at_age', { age: g.retirement_age ?? '' }, `at ${g.retirement_age}`) : monthLabel(g.date, months())}</span>
+        {g.moved && <Pill tone="accent"><CalendarClock size={11} />{t('flow.moved', {}, 'moved')}</Pill>}
+        {g.amount !== null && g.type !== 'retirement' && <span className="text-ink-2 tabular">{chf(g.amount)}</span>}
+        {g.kind === 'save' && <Pill tone="neutral"><Lock size={11} />{t('flow.kept_saved', {}, 'kept saved')}</Pill>}
+        <span className={`ml-auto inline-flex items-center gap-1 font-medium ${bad ? 'text-critical' : 'text-good-text'}`}>
+          {bad ? <TriangleAlert size={14} /> : <CircleCheck size={14} />}
+          {t('flow.chance', { pct: pct(g.p) }, `${pct(g.p)} likely`)}
+          {bad && g.shortfall ? <span className="font-normal">· {t('flow.shortfall_short', { amount: chf(g.shortfall) }, `shortfall ~${chf(g.shortfall)}`)}</span> : null}
+        </span>
+        {g.move_to && (
+          <button onClick={onMoveLater} className="inline-flex items-center gap-1 rounded-lg border border-line px-2 py-0.5 text-xs font-medium hover:bg-surface-2"
+            title={t('flow.move_hint', {}, '9 of 10 futures make it by then')}>
+            <CalendarClock size={12} />{t('flow.move_later', { when: g.type === 'retirement' ? g.move_to.retirement_age ?? '' : g.move_to.date.slice(0, 4) }, `Move to ${g.move_to.date.slice(0, 4)}`)}
+          </button>
+        )}
+        {spec && <button onClick={() => setEditing(!editing)} className="rounded p-1 text-ink-2 hover:bg-surface-2" aria-label={t('flow.edit', {}, 'Edit')} title={t('flow.edit', {}, 'Edit')}><Pencil size={13} /></button>}
+        <button onClick={onDelete} className="rounded p-1 text-muted hover:text-critical" aria-label={t('flow.delete', {}, 'Delete')} title={t('flow.delete', {}, 'Delete')}><X size={14} /></button>
+      </div>
+      {editing && spec && <GoalEditor goal={spec} onCancel={() => setEditing(false)} onSave={(goal) => { setEditing(false); onSave(goal) }} />}
+    </li>
+  )
+}
 
-function ActionRow({ lv, state, onCheck, onDetails, onDelete }: {
-  lv: LeverCard; state: State; onCheck: (on: boolean) => void; onDetails: () => void; onDelete: () => void
+function ActionRow({ lv, on, recommended, gain, onToggle, onDetails, onDelete }: {
+  lv: LeverCard; on: boolean; recommended: boolean; gain: number | undefined
+  onToggle: (on: boolean) => void; onDetails: () => void; onDelete: () => void
 }) {
   const { t } = useT()
-  const ai = lv.origin === 'agent'
-  const style = state === 'accepted' ? 'border-accent bg-accent-wash' : state === 'selected' ? 'border-dashed border-accent bg-surface' : 'border-line bg-surface opacity-75'
+  const style = on ? 'border-accent bg-accent-wash' : recommended ? 'border-good/60 bg-good/10' : 'border-line bg-surface'
   return (
     <li className={`flex items-start gap-3 rounded-xl border p-2.5 transition ${style}`}>
-      <input type="checkbox" checked={state !== 'off'} onChange={(e) => onCheck(e.target.checked)} className="mt-1.5 h-4 w-4 accent-[var(--series-1)]" aria-label={lv.title} />
-      <LeverIcon name={lv.icon} origin={lv.origin} />
+      <input type="checkbox" checked={on} onChange={(e) => onToggle(e.target.checked)} className="mt-1.5 h-4 w-4 accent-[var(--series-1)]" aria-label={lv.title} />
+      <LeverIcon name={lv.icon} origin={lv.origin === 'user' ? 'builtin' : lv.origin} />
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium leading-snug">{lv.title}</div>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
-          {state === 'accepted' && <Pill tone="accent"><Check size={11} />{t('flow.accepted', {}, 'Accepted')}</Pill>}
-          {ai && <Pill tone="llm"><Sparkles size={11} />{t('flow.ai_idea', {}, 'AI idea')}</Pill>}
-          {lv.impact_label && <Pill tone={(lv.months_gained ?? 0) > 0 || lv.delta_p > 0.005 ? 'good' : 'neutral'}>{lv.impact_label}</Pill>}
+          {recommended && <Pill tone="good"><Star size={11} />{t('flow.recommended', {}, 'Recommended')}</Pill>}
+          {lv.origin === 'agent' && <Pill tone="llm"><Sparkles size={11} />{t('flow.ai_idea', {}, 'AI idea')}</Pill>}
           {lv.monthly_equivalent !== 0 && <span className="text-xs text-ink-2 tabular">{lv.monthly_equivalent > 0 ? '+' : ''}{chf(lv.monthly_equivalent)}/{t('ui.month_short', {}, 'mo')}</span>}
-          <Pill>{t(`effort.${lv.effort}`)}</Pill>
-          <button onClick={onDetails} className="inline-flex items-center gap-1 text-xs text-accent hover:underline"><FileText size={12} />{t('flow.details', {}, 'Details')}</button>
+          {lv.effort && <Pill>{t(`effort.${lv.effort}`)}</Pill>}
+          {lv.assumptions.length > 0 && <button onClick={onDetails} className="inline-flex items-center gap-1 text-xs text-accent hover:underline"><FileText size={12} />{t('flow.details', {}, 'Details')}</button>}
         </div>
       </div>
+      {gain !== undefined && (
+        <span className={`shrink-0 self-center rounded-lg px-2 py-1 text-sm font-semibold tabular ${gain > 0.005 ? 'bg-good/15 text-good-text' : gain < -0.005 ? 'bg-critical/10 text-critical' : 'bg-surface-2 text-ink-2'}`}
+          title={t('flow.gain_hint', {}, 'Change in the chance of reaching this goal')}>
+          {gain >= 0 ? '+' : '−'}{Math.abs(Math.round(gain * 100))} {t('flow.pts', {}, 'pts')}
+        </span>
+      )}
       <button onClick={onDelete} className="rounded p-1 text-muted hover:text-critical" aria-label={t('flow.delete', {}, 'Delete')} title={t('flow.delete', {}, 'Delete')}><Trash2 size={14} /></button>
     </li>
   )
 }
 
-export interface GoalActions {
-  shown: string[]                                 // every action listed for this goal, until deleted
-  selected: string[]                              // picked but not accepted yet (previewed)
-}
-
-/** A goal that fails in more than 1 of 10 futures: the risk and shortfall, actions (accepted / selected / off),
- *  what accepting the selection would do, a what-if box, and "move the date". */
-function RiskCard({ g, tl, clientId, active, actions, ideasLoading, onAccept, onUnaccept, onSelect, onDelete, onDetails, onLever, onMove }: {
-  g: TimelineGoal; tl: Timeline; clientId: string; active: string[]; actions: GoalActions; ideasLoading: boolean
-  onAccept: (ids: string[]) => void; onUnaccept: (id: string) => void; onSelect: (id: string, on: boolean) => void
-  onDelete: (id: string) => void; onDetails: (id: string) => void; onLever: (id: string) => void; onMove: (g: TimelineGoal) => void
+/** Actions for the goal in focus: each with how many points it adds to that goal's chance, best first. */
+function ActionsCard({ tl, clientId, active, listed, ideasLoading, onToggle, onActivateAll, onDelete, onDetails, onLever }: {
+  tl: Timeline; clientId: string; active: string[]; listed: string[]; ideasLoading: boolean
+  onToggle: (id: string, on: boolean) => void; onActivateAll: (ids: string[]) => void; onDelete: (id: string) => void
+  onDetails: (id: string) => void; onLever: (id: string) => void
 }) {
   const { t, months } = useT()
-  const state = (i: string): State => (active.includes(i) ? 'accepted' : actions.selected.includes(i) ? 'selected' : 'off')
-  const order: Record<State, number> = { accepted: 0, selected: 1, off: 2 }
-  const ids = [...new Set([...actions.shown, ...active.filter((i) => tl.cards[i])])]
-    .filter((i) => tl.cards[i]).sort((a, b) => order[state(a)] - order[state(b)])
-  const when = g.type === 'retirement' ? t('flow.at_age', { age: g.retirement_age ?? '' }, `at ${g.retirement_age}`) : monthLabel(g.date, months())
-  const moveLabel = g.move_to && (g.type === 'retirement' ? t('flow.at_age', { age: g.move_to.retirement_age ?? '' }, `at ${g.move_to.retirement_age}`) : monthLabel(g.move_to.date, months()))
-  const okNow = 1 - g.p <= tl.alert_failure
-  const pending = actions.selected.filter((i) => !active.includes(i))
-  const short = (v: number | null) => (v ? ` ${t('flow.shortfall', { amount: chf(v), year: when }, `Expected shortfall by ${when}: ${chf(v)}.`)}` : '')
+  const a = tl.actions!
+  const ids = [...new Set([...a.recommended, ...listed, ...active])].filter((i) => tl.cards[i])
+  const gain = (i: string) => a.gains[i] ?? -1
+  ids.sort((x, y) => gain(y) - gain(x))
+  const open = a.recommended.filter((i) => !active.includes(i))
+  const tone = a.p_to >= 1 - tl.alert_failure ? 'bg-good/15 text-good-text' : a.p_to >= tl.success_threshold ? 'bg-warning/20 text-ink' : 'bg-critical/10 text-critical'
   return (
-    <Card className="overflow-hidden">
-      <div className="flex items-start gap-3 bg-critical/10 px-4 py-3 text-critical">
-        <TriangleAlert size={20} className="mt-0.5 shrink-0" />
-        <div>
-          <div className="font-semibold">{g.label} · {when}</div>
-          <div className="text-sm">{t('flow.fail_chance', { pct: pct(1 - g.p_base) }, `Without changes, a ${pct(1 - g.p_base)} chance you won't make it.`)}</div>
-        </div>
+    <Card className="p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-semibold">{t('flow.actions_for', { goal: a.goal_label, year: monthLabel(a.goal_date, months()) }, `What would help: ${a.goal_label}`)}</h2>
+        {open.length > 0 && (
+          <button onClick={() => onActivateAll(open)} className="inline-flex items-center gap-1 rounded-lg bg-good px-3 py-1.5 text-sm font-medium text-white">
+            <Star size={14} />{t('flow.activate_all', {}, 'Activate all recommended')}
+          </button>
+        )}
       </div>
-      <div className="space-y-3 p-4">
-        <div className="text-sm font-medium">{t('flow.our_proposal', {}, 'What would help')}</div>
-        <ul className="space-y-2">
-          {ids.map((i) => (
-            <ActionRow key={i} lv={tl.cards[i]} state={state(i)} onDetails={() => onDetails(i)} onDelete={() => onDelete(i)}
-              onCheck={(on) => (state(i) === 'accepted' ? onUnaccept(i) : onSelect(i, on))} />
-          ))}
-          {ideasLoading && (
-            <li className="flex items-center gap-2 rounded-xl border border-dashed border-llm/40 p-2.5 text-sm text-llm">
-              <LoaderCircle size={14} className="animate-spin" />{t('flow.ai_thinking', {}, 'The AI is looking for ideas that fit you…')}
-            </li>
-          )}
-        </ul>
-        <div className={`rounded-lg px-3 py-2 text-sm ${okNow ? 'bg-good/10 text-good-text' : 'bg-critical/10 text-critical'}`}>
-          <div className="flex items-center gap-2 font-medium">
-            {okNow ? <CircleCheck size={16} /> : <TriangleAlert size={16} />}
-            {t('flow.with_accepted', { pct: pct(1 - g.p) }, `With your accepted actions: ${pct(1 - g.p)} chance of missing it.`)}
-          </div>
-          {!okNow && g.shortfall ? <div className="pl-6">{short(g.shortfall)}</div> : null}
-        </div>
-        {pending.length > 0 && g.p_preview !== null && (
-          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-accent px-3 py-2 text-sm">
-            <span>
-              {t('flow.if_accept', { n: pending.length, pct: pct(1 - g.p_preview) }, `If you accept the ${pending.length} selected: ${pct(1 - g.p_preview)} chance of missing it.`)}
-              {1 - g.p_preview > tl.alert_failure ? short(g.shortfall_preview) : ''}
-            </span>
-            <button onClick={() => onAccept(pending)} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-accent px-3 py-1.5 font-medium text-white">
-              <Check size={14} />{t('flow.accept_selected', {}, 'Accept selected actions')}
-            </button>
-          </div>
+      <ul className="mt-3 space-y-2">
+        {ids.map((i) => (
+          <ActionRow key={i} lv={tl.cards[i]} on={active.includes(i)} recommended={a.recommended.includes(i)} gain={a.gains[i]}
+            onToggle={(on) => onToggle(i, on)} onDetails={() => onDetails(i)} onDelete={() => onDelete(i)} />
+        ))}
+        {ideasLoading && (
+          <li className="flex items-center gap-2 rounded-xl border border-dashed border-llm/40 p-2.5 text-sm text-llm">
+            <LoaderCircle size={14} className="animate-spin" />{t('flow.ai_thinking', {}, 'The AI is looking for ideas that fit you…')}
+          </li>
         )}
-        <WhatIfBox clientId={clientId} goalId={g.id} onLever={onLever} />
-        {g.move_to && moveLabel && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3 text-sm">
-            <CalendarPlus size={16} className="text-ink-2" />
-            <span className="text-ink-2">{t('flow.or_move', { when: moveLabel }, `Or move the date: ${moveLabel} makes it in 9 of 10 futures.`)}</span>
-            <button onClick={() => onMove(g)} className="rounded-lg border border-line px-2.5 py-1 font-medium hover:bg-surface-2">
-              {t('flow.move_to', { when: moveLabel }, `Move to ${moveLabel}`)}
-            </button>
-          </div>
-        )}
+      </ul>
+      <div className="mt-3"><WhatIfBox clientId={clientId} goalId={a.goal_id} onLever={onLever} /></div>
+      <div className={`mt-3 rounded-lg px-3 py-2 text-sm font-medium ${tone}`}>
+        {Math.abs(a.p_to - a.p_from) < 0.005
+          ? t('flow.chances_now', { pct: pct(a.p_to) }, `Chance today: ${pct(a.p_to)}. Switch on actions to raise it.`)
+          : t('flow.chances_raise', { from: pct(a.p_from), to: pct(a.p_to) }, `These actions raise your chances from ${pct(a.p_from)} to ${pct(a.p_to)}.`)}
       </div>
     </Card>
   )
 }
 
-/** Page 2: every goal on one timeline, and for each goal at risk what would bring it back. */
-export function MainPage({ clientId, tl, active, actions, loading, ideasLoading, onAccept, onUnaccept, onSelect, onDelete, onDetails, onLever, onMove, onPro, onFacts, onGoals }: {
-  clientId: string; tl: Timeline; active: string[]; actions: Record<string, GoalActions>; loading: boolean; ideasLoading: Record<string, boolean>
-  onAccept: (ids: string[]) => void; onUnaccept: (id: string) => void; onSelect: (goalId: string, id: string, on: boolean) => void
-  onDelete: (goalId: string, id: string) => void; onDetails: (id: string) => void; onLever: (goalId: string, id: string) => void
-  onMove: (g: TimelineGoal) => void; onPro: () => void; onFacts: () => void; onGoals: () => void
+/** Page 2: every goal on one timeline, and the actions for the first goal that fails. */
+export function MainPage({ clientId, tl, goals, active, listed, loading, ideasLoading, onToggle, onActivateAll, onDelete, onDetails, onLever,
+  onFocus, onSaveGoal, onDeleteGoal, onPro, onFacts, onGoals }: {
+  clientId: string; tl: Timeline; goals: GoalSpec[]; active: string[]; listed: string[]; loading: boolean; ideasLoading: Record<string, boolean>
+  onToggle: (id: string, on: boolean) => void; onActivateAll: (ids: string[]) => void; onDelete: (id: string) => void
+  onDetails: (id: string) => void; onLever: (id: string) => void; onFocus: (goalId: string) => void
+  onSaveGoal: (g: GoalSpec) => void; onDeleteGoal: (goalId: string) => void; onPro: () => void; onFacts: () => void; onGoals: () => void
 }) {
-  const { t, months } = useT()
-  const risky = tl.goals.filter((g) => g.at_risk)
+  const { t } = useT()
   return (
     <div className={`mx-auto max-w-5xl space-y-4 px-4 py-6 transition-opacity ${loading ? 'opacity-60' : ''}`}>
       <Card className="p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <h2 className="text-xl font-semibold">{t('flow.your_goals', {}, 'Your goals over time')}</h2>
-          <button onClick={onGoals} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-ink-2 hover:bg-surface-2"><Pencil size={14} />{t('flow.change_goals', {}, 'Change goals')}</button>
+          <button onClick={onGoals} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-ink-2 hover:bg-surface-2"><Pencil size={14} />{t('flow.add_goals', {}, 'Add goals')}</button>
         </div>
         <div className="mt-3"><GoalsChart tl={tl} /></div>
         <ul className="mt-4 divide-y divide-line border-t border-line text-sm">
-          {tl.goals.map((g) => {
-            const Icon = g.type === 'home' ? House : ICON[g.kind]
-            const bad = 1 - g.p > tl.alert_failure
-            return (
-              <li key={g.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
-                <Icon size={16} className="text-ink-2" />
-                <span className="font-medium">{g.label}</span>
-                <span className="text-ink-2">{g.type === 'retirement' ? t('flow.at_age', { age: g.retirement_age ?? '' }, `at ${g.retirement_age}`) : monthLabel(g.date, months())}</span>
-                {g.amount !== null && g.type !== 'retirement' && <span className="text-ink-2 tabular">{chf(g.amount)}</span>}
-                {g.kind === 'save' && <Pill tone="neutral"><Lock size={11} />{t('flow.kept_saved', {}, 'kept saved')}</Pill>}
-                <span className={`ml-auto inline-flex items-center gap-1 font-medium ${bad ? 'text-critical' : 'text-good-text'}`}>
-                  {bad ? <TriangleAlert size={14} /> : <CircleCheck size={14} />}
-                  {t('flow.chance', { pct: pct(g.p) }, `${pct(g.p)} likely`)}
-                  {bad && g.shortfall ? <span className="font-normal">· {t('flow.shortfall_short', { amount: chf(g.shortfall) }, `shortfall ~${chf(g.shortfall)}`)}</span> : null}
-                </span>
-              </li>
-            )
-          })}
+          {tl.goals.map((g) => (
+            <GoalLine key={g.id} g={g} spec={goals.find((x) => x.id === g.id)} tl={tl} focused={tl.actions?.goal_id === g.id}
+              onFocus={() => onFocus(g.id)} onSave={onSaveGoal} onDelete={() => onDeleteGoal(g.id)}
+              onMoveLater={() => g.move_to && onLever(g.move_to.action)} />
+          ))}
         </ul>
       </Card>
 
-      {risky.map((g) => (
-        <RiskCard key={g.id} g={g} tl={tl} clientId={clientId} active={active} actions={actions[g.id] ?? { shown: g.proposal, selected: [] }}
-          ideasLoading={!!ideasLoading[g.id]} onAccept={onAccept} onUnaccept={onUnaccept}
-          onSelect={(id, on) => onSelect(g.id, id, on)} onDelete={(id) => onDelete(g.id, id)} onDetails={onDetails}
-          onLever={(id) => onLever(g.id, id)} onMove={onMove} />
-      ))}
+      {tl.actions && (
+        <ActionsCard tl={tl} clientId={clientId} active={active} listed={listed} ideasLoading={!!ideasLoading[tl.actions.goal_id]}
+          onToggle={onToggle} onActivateAll={onActivateAll} onDelete={onDelete} onDetails={onDetails} onLever={onLever} />
+      )}
 
       <div className="flex justify-between pb-16">
         <button onClick={onFacts} className="inline-flex items-center gap-1.5 text-sm text-accent hover:underline"><Database size={14} />{t('flow.see_data', {}, "See the data we're working with")}</button>
