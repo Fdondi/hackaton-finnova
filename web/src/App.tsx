@@ -1,6 +1,6 @@
 import { ArrowLeft, Bot, Briefcase, Database, Languages, User } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api, type CrossGoalEffect, type GoalSpec, type Overrides, type Overview, type PlanResponse } from './api'
+import { api, type CrossGoalEffect, type GoalSpec, type LeverCard, type Overrides, type Overview, type PlanResponse, type Timeline, type TimelineGoal } from './api'
 import { AdvisorView } from './components/AdvisorView'
 import { DataInsightsView } from './components/DataInsightsView'
 import { GoalCard } from './components/GoalCard'
@@ -73,6 +73,10 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
   const [version, setVersion] = useState(0)
   const [llm, setLlm] = useState<{ available: boolean; provider: string | null; model: string | null } | null>(null)
   const autoPlanned = useRef(new Set<string>())   // goals whose action plan we already pre-selected once
+  const [timeline, setTimeline] = useState<Timeline | null>(null)
+  const [whyCard, setWhyCard] = useState<LeverCard | null>(null)
+  const [ideasLoading, setIdeasLoading] = useState<Record<string, boolean>>({})
+  const ideasAsked = useRef(new Set<string>())    // goals whose AI ideas we already requested
 
   useEffect(() => {
     api.clients().then((cs) => { setClients(cs); setClientId((cur) => cur ?? cs[0]?.id ?? null) })
@@ -90,12 +94,43 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
     })
   }, [clientId, lang, version])
 
-  useEffect(() => { setActive([]); setOverrides({}); setPlan(null); setPage('goals'); setView('client'); autoPlanned.current.clear() }, [clientId])
-  useEffect(() => { setActive([]); setOverrides((o) => ({ global: o.global ?? {} })) }, [goalId])
+  useEffect(() => {
+    setActive([]); setOverrides({}); setPlan(null); setTimeline(null); setPage('goals'); setView('client')
+    autoPlanned.current.clear(); ideasAsked.current.clear(); setIdeasLoading({})
+  }, [clientId])
+  useEffect(() => { if (page === 'pro') setOverrides((o) => ({ global: o.global ?? {} })) }, [goalId, page])
+
+  // Main page: every confirmed goal on one timeline. At-risk goals get their proposal ticked once, and AI ideas.
+  useEffect(() => {
+    if (!clientId || page !== 'main') return
+    const ctrl = new AbortController()
+    const timer = setTimeout(async () => {
+      setLoading(true); setError(null)
+      try {
+        const tl = await api.timeline(clientId, { active, overrides, lang }, ctrl.signal)
+        setTimeline(tl)
+        setLoading(false)
+        const fresh = tl.goals.filter((g) => g.at_risk && !autoPlanned.current.has(`tl:${g.id}`))
+        fresh.forEach((g) => autoPlanned.current.add(`tl:${g.id}`))
+        const add = fresh.flatMap((g) => g.proposal).filter((i) => !active.includes(i))
+        if (add.length) setActive((a) => [...a, ...add.filter((i) => !a.includes(i))])
+        for (const g of tl.goals.filter((x) => x.at_risk && !ideasAsked.current.has(x.id))) {
+          ideasAsked.current.add(g.id)
+          setIdeasLoading((s) => ({ ...s, [g.id]: true }))
+          api.goalIdeas(clientId, g.id, lang).then((r) => {
+            if (r.ids.length) { setActive((a) => [...a, ...r.ids.filter((i) => !a.includes(i))]); setVersion((v) => v + 1) }
+          }).catch(() => {}).finally(() => setIdeasLoading((s) => ({ ...s, [g.id]: false })))
+        }
+      } catch (e) {
+        if (!ctrl.signal.aborted) { setError(String(e)); setLoading(false) }
+      }
+    }, 150)
+    return () => { clearTimeout(timer); ctrl.abort() }
+  }, [clientId, active, overrides, lang, version, page])
 
   // Re-simulate on every change (main and pro pages); hold the previous render (dimmed) while the new one loads.
   useEffect(() => {
-    if (!clientId || !goalId || (page !== 'main' && page !== 'pro')) return
+    if (!clientId || !goalId || page !== 'pro') return
     const ctrl = new AbortController()
     const timer = setTimeout(async () => {
       setLoading(true)
@@ -132,10 +167,20 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
     })
   }, [])
   const addLever = useCallback((id: string) => { setActive((a) => (a.includes(id) ? a : [...a, id])); setVersion((v) => v + 1) }, [])
+  const moveGoal = useCallback(async (g: TimelineGoal) => {
+    const spec = overview?.goals.find((x) => x.id === g.id)
+    if (!clientId || !spec || !g.move_to) return
+    const { status_info: _drop, ...goal } = spec
+    void _drop
+    await api.upsertGoal(clientId, g.type === 'retirement'
+      ? { ...goal, params: { ...goal.params, retirement_age: g.move_to.retirement_age ?? goal.params.retirement_age } }
+      : { ...goal, target_date: g.move_to.date })
+    setVersion((v) => v + 1)
+  }, [clientId, overview])
   const openFacts = () => { setFactsFrom(page); setPage('facts') }
 
   const whyLever = useMemo(() => (why && why !== 'global' ? plan?.levers.find((l) => l.lever_id === why) : undefined), [why, plan])
-  const planReady = plan && goalId && plan.goal.id === goalId
+  const planReady = page === 'main' ? !!timeline : plan && goalId && plan.goal.id === goalId
 
   return (
     <div className="min-h-screen">
@@ -168,7 +213,7 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
             </span>
           )}
         </div>
-        {overview && (page === 'main' || (page === 'pro' && view !== 'data')) && confirmed.length > 0 && (
+        {overview && page === 'pro' && view !== 'data' && confirmed.length > 0 && (
           <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-4 pb-2">
             {confirmed.map((g) => (
               <button key={g.id} onClick={() => setGoalId(g.id)}
@@ -194,8 +239,9 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
       ) : !planReady ? (
         <div className="p-10 text-ink-2">{t('ui.thinking', {}, 'Loading…')}</div>
       ) : page === 'main' ? (
-        <MainPage clientId={clientId} plan={plan} cross={cross} active={active} loading={loading || crossLoading}
-          onToggle={toggle} onWhy={setWhy} onLever={addLever} onPro={() => setPage('pro')} onFacts={openFacts} onGoals={() => setPage('goals')} />
+        <MainPage clientId={clientId} tl={timeline!} active={active} loading={loading} ideasLoading={ideasLoading}
+          onToggle={toggle} onWhy={setWhyCard} onLever={addLever} onMove={moveGoal}
+          onPro={() => setPage('pro')} onFacts={openFacts} onGoals={() => setPage('goals')} />
       ) : (
         <main className="mx-auto max-w-7xl space-y-4 px-4 py-4">
           <div className="flex flex-wrap items-center gap-4 text-sm">
@@ -214,14 +260,14 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
               </div>
               <div className={`grid gap-4 transition-opacity lg:grid-cols-12 ${loading ? 'opacity-60' : ''}`}>
                 <div className="lg:col-span-7">
-                  <GoalCard plan={plan} cross={cross} crossLoading={crossLoading} anyActive={active.length > 0}
+                  <GoalCard plan={plan!} cross={cross} crossLoading={crossLoading} anyActive={active.length > 0}
                     onWhy={() => setWhy('global')}
                     onEditGoal={async (g: GoalSpec) => { await api.upsertGoal(clientId, g); setVersion((v) => v + 1) }} />
                   <div className="mt-4"><SpendingCard ov={overview} /></div>
                   {overview.risk && <div className="mt-4"><RiskCard risk={overview.risk} /></div>}
                 </div>
                 <div className="lg:col-span-5">
-                  <LeverPanel plan={plan} onToggle={toggle} onUsePlan={() => setActive(plan.plan)} onClear={() => setActive([])}
+                  <LeverPanel plan={plan!} onToggle={toggle} onUsePlan={() => setActive(plan!.plan)} onClear={() => setActive([])}
                     onWhy={setWhy}
                     onRemove={async (id) => { await api.removeLever(clientId, id); setActive((a) => a.filter((x) => x !== id)); setVersion((v) => v + 1) }}>
                     <WhatIfBox clientId={clientId} goalId={goalId!} onLever={addLever} />
@@ -233,7 +279,12 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
         </main>
       )}
 
-      {why && plan && (page === 'main' || page === 'pro') && (
+      {whyCard && page === 'main' && (
+        <WhyDrawer title={whyCard.title} description={whyCard.description} sideEffects={whyCard.side_effects}
+          assumptions={whyCard.assumptions} lever={whyCard}
+          onChange={(k, v) => setOverride(whyCard.lever_id, k, v)} onClose={() => setWhyCard(null)} />
+      )}
+      {why && plan && page === 'pro' && (
         why === 'global' ? (
           <WhyDrawer title={t('ui.assumptions')} assumptions={plan.assumptions} notes={overview?.data_quality}
             onChange={(k, v) => setOverride('global', k, v)} onClose={() => setWhy(null)} />

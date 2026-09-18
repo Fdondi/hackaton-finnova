@@ -40,7 +40,7 @@ def kvg_deductible(ctx: LeverContext):
     a = ctx.book("kvg_deductible")
     current_d = int(a.get("current_deductible", client.health.deductible or 300, label="Your deductible today", unit="CHF",
                           source="client_data" if client.health.deductible else "market_default",
-                          needs_confirmation=not client.health.deductible, editable=False))
+                          needs_confirmation=not client.health.deductible))
     prem_tx = sum(-r.monthly_equivalent for r in ctx.profile.recurring if r.active and r.category == "health_premium")
     premium_now = a.get("premium_monthly", prem_tx or client.health.premium_monthly or 400, label="Premium per month today",
                         unit="CHF/month", source="transactions" if prem_tx else "client_data", step=5)

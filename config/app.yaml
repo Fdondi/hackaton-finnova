@@ -9,6 +9,7 @@ simulation:
 
 planning:
   buffer_months: 3            # months of fixed costs kept as emergency reserve, never spent on goals
+  alert_failure: 0.10         # main page: a goal with a higher chance of failing gets a red alert and a proposal
   idle_cash_buffer_months: 6  # cash above this many months of spending counts as "idle"
   effort_weight: {none: 1.0, low: 1.3, medium: 2.0, high: 3.0}
   auto_plan_excluded_groups: [goal_change, life_event]

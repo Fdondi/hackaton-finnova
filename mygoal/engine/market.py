@@ -34,8 +34,9 @@ class Market:
     bill_mu: float = 0.0
     bill_sigma: float = 0.0
 
-    def monthly_lognormal(self, portfolio: str) -> tuple[float, float]:
+    def monthly_lognormal(self, portfolio: str, expected_return: float | None = None) -> tuple[float, float]:
         r, vol = self.portfolios.get(portfolio, self.portfolios["balanced"])
+        r = r if expected_return is None else expected_return
         sd = vol / math.sqrt(12)
         return math.log(1 + r) / 12 - 0.5 * sd * sd, sd
 

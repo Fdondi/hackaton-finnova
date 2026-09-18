@@ -1,91 +1,90 @@
-import { CalendarClock, CircleHelp, Database, Gauge, ListChecks, Pencil } from 'lucide-react'
+import { CalendarPlus, CircleCheck, CircleHelp, Database, Gauge, House, LoaderCircle, Lock, Pencil, PiggyBank, Sparkles, Target, TreePalm, TriangleAlert } from 'lucide-react'
 import { useMemo } from 'react'
-import { CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import type { CrossGoalEffect, LeverCard, PlanResponse } from '../api'
+import { Area, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import type { LeverCard, Timeline, TimelineGoal } from '../api'
 import { useTokens } from '../components/tokens'
-import { Futures } from '../components/Futures'
 import { WhatIfBox } from '../components/WhatIfBox'
 import { Card, LeverIcon, Pill } from '../components/ui'
-import { chf, chfCompact, delayLabel, monthLabel } from '../format'
+import { chf, chfCompact, monthLabel } from '../format'
 import { useT } from '../i18n'
 
-interface Row { d: string; base: number; plan?: number; need: number }
+const pct = (x: number) => `${Math.round(x * 100)}%`
+const ICON = { spend: Target, save: PiggyBank, retirement: TreePalm } as const
 
-/** The sketch's "Scenario": today's path vs what the goal needs, and how much later it gets there (+3y). */
-function ScenarioChart({ plan, withPlan }: { plan: PlanResponse; withPlan: boolean }) {
+interface Row { d: string; pension: number; locked: number; available: number; low: number }
+
+/** All goals on one timeline: spending goals take their money out, saving goals and pension money are locked. */
+function GoalsChart({ tl }: { tl: Timeline }) {
   const { t, months } = useT()
   const c = useTokens()
-  const b = plan.baseline, s = plan.scenario
-  const rows: Row[] = useMemo(() => {
-    const bf = b.fan, sf = s.fan
-    if (!bf) return []
-    const planBy = new Map((sf?.dates ?? []).map((d, i) => [d, sf!.p50[i]]))
-    const all = bf.dates.map((d, i) => ({ d, base: bf.p50[i], need: bf.need[i], plan: withPlan ? planBy.get(d) : undefined }))
-    if (!withPlan || !sf?.dates.length) return all
-    // end where the plan's line ends, but always show where today's path gets there
-    const end = [sf.dates[sf.dates.length - 1], b.achieved.p50 ?? ''].sort().pop()!
-    const cut = all.findIndex((r) => r.d > end)
-    return cut < 0 ? all : all.slice(0, Math.min(all.length, cut + 2))
-  }, [b.fan, s.fan, b.achieved.p50, withPlan])
-  if (!rows.length) return null
-  // the fan is sampled quarterly: put markers on the nearest sampled month
-  const snap = (iso: string | null) => (iso ? rows.reduce((best, r) => (Math.abs(Date.parse(r.d) - Date.parse(iso)) < Math.abs(Date.parse(best) - Date.parse(iso)) ? r.d : best), rows[0].d) : null)
+  const rows: Row[] = useMemo(() => tl.dates.map((d, i) => ({
+    d, pension: tl.pension[i], locked: tl.locked[i], available: Math.max(tl.free[i] - tl.locked[i], 0), low: tl.free_low[i],
+  })), [tl])
+  const snap = (iso: string) => rows.reduce((best, r) => (Math.abs(Date.parse(r.d) - Date.parse(iso)) < Math.abs(Date.parse(best) - Date.parse(iso)) ? r.d : best), rows[0].d)
+  const inRange = tl.goals.filter((g) => g.date <= tl.end)
   const years = rows.filter((r, i) => i === 0 || r.d.slice(0, 4) !== rows[i - 1].d.slice(0, 4)).map((r) => r.d).slice(1)
-  const ticks = years.filter((_, i) => i % Math.max(1, Math.ceil(years.length / 7)) === 0)
-  const late = b.months_late ?? null
-  const baseWhen = snap(b.achieved.p50)
-  const planWhen = withPlan ? snap(s.achieved.p50) : null
+  const ticks = years.filter((_, i) => i % Math.max(1, Math.ceil(years.length / 8)) === 0)
+  const risky = (g: TimelineGoal) => 1 - g.p > tl.alert_failure
+  const violet = c['--series-violet'] || '#4a3aa7'
   return (
-    <div className="h-64 w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={rows} margin={{ top: 24, right: 16, bottom: 0, left: 0 }}>
-          <CartesianGrid vertical={false} stroke={c['--grid']} />
-          <XAxis dataKey="d" ticks={ticks} tickFormatter={(d: string) => d.slice(0, 4)} stroke={c['--axis']}
-            tick={{ fill: c['--muted'], fontSize: 12 }} tickLine={false} />
-          <YAxis tickFormatter={chfCompact} width={44} stroke={c['--axis']} tick={{ fill: c['--muted'], fontSize: 12 }} tickLine={false} axisLine={false} />
-          <Tooltip cursor={{ stroke: c['--axis'] }} content={({ active, payload, label }) => {
-            if (!active || !payload?.length) return null
-            const r = payload[0].payload as Row
-            return (
-              <div className="rounded-lg border border-line bg-surface px-3 py-2 text-xs shadow-lg">
-                <div className="mb-1 text-ink-2">{monthLabel(String(label), months())}</div>
-                <div className="tabular">{t('flow.today_path', {}, 'Today’s path')}: <b>{chf(r.base)}</b></div>
-                {r.plan !== undefined && <div className="tabular">{t('flow.with_plan', {}, 'With your plan')}: <b>{chf(r.plan)}</b></div>}
-                <div className="tabular">{t('ui.need')}: <b>{chf(r.need)}</b></div>
-              </div>
-            )
-          }} />
-          <Line dataKey="need" stroke={c['--series-2']} strokeWidth={2} dot={false} isAnimationActive={false} />
-          <Line dataKey="base" stroke={withPlan ? c['--muted'] : c['--series-1']} strokeWidth={withPlan ? 1.5 : 2.5}
-            strokeDasharray={withPlan ? '5 4' : undefined} dot={false} isAnimationActive={false} />
-          {withPlan && <Line dataKey="plan" stroke={c['--series-1']} strokeWidth={2.5} dot={false} isAnimationActive={false} />}
-          <ReferenceLine x={snap(s.target_date)!} stroke={c['--ink-2']}
-            label={{ value: `${t('flow.your_date', {}, 'Your date')} ${monthLabel(s.target_date, months())}`, position: 'top', fill: c['--ink-2'], fontSize: 12 }} />
-          {baseWhen && late !== null && late > 0 && (
-            <ReferenceLine x={baseWhen} stroke={c['--critical']} strokeDasharray="4 3"
-              label={{ value: delayLabel(late, t), position: 'insideTopRight', fill: c['--critical'], fontSize: 15, fontWeight: 700 }} />
-          )}
-          {planWhen && planWhen !== baseWhen && (
-            <ReferenceLine x={planWhen} stroke={c['--good']} strokeDasharray="4 3" />
-          )}
-        </ComposedChart>
-      </ResponsiveContainer>
+    <div>
+      <div className="h-72 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={rows} margin={{ top: 34, right: 16, bottom: 0, left: 0 }}>
+            <CartesianGrid vertical={false} stroke={c['--grid']} />
+            <XAxis dataKey="d" ticks={ticks} tickFormatter={(d: string) => d.slice(0, 4)} stroke={c['--axis']} tick={{ fill: c['--muted'], fontSize: 12 }} tickLine={false} />
+            <YAxis tickFormatter={chfCompact} width={48} stroke={c['--axis']} tick={{ fill: c['--muted'], fontSize: 12 }} tickLine={false} axisLine={false} />
+            <Tooltip cursor={{ stroke: c['--axis'] }} content={({ active, payload, label }) => {
+              if (!active || !payload?.length) return null
+              const r = payload[0].payload as Row
+              return (
+                <div className="rounded-lg border border-line bg-surface px-3 py-2 text-xs shadow-lg">
+                  <div className="mb-1 text-ink-2">{monthLabel(String(label), months())}</div>
+                  <div className="tabular">{t('flow.available', {}, 'Available')}: <b>{chf(r.available)}</b></div>
+                  {r.locked > 0 && <div className="tabular">{t('flow.locked_goals', {}, 'Set aside for goals')}: <b>{chf(r.locked)}</b></div>}
+                  <div className="tabular">{t('flow.pension_locked', {}, 'Pension (locked)')}: <b>{chf(r.pension)}</b></div>
+                  <div className="tabular text-ink-2">{t('flow.bad_case', {}, 'Bad case (1 in 10)')}: {chf(r.low)}</div>
+                </div>
+              )
+            }} />
+            <Area dataKey="pension" stackId="w" stroke="none" fill={c['--muted']} fillOpacity={0.25} isAnimationActive={false} />
+            <Area dataKey="locked" stackId="w" stroke="none" fill={violet} fillOpacity={0.45} isAnimationActive={false} />
+            <Area dataKey="available" stackId="w" stroke={c['--series-1']} strokeWidth={2} fill={c['--series-1']} fillOpacity={0.18} isAnimationActive={false} />
+            <Line dataKey={(r: Row) => r.pension + r.locked + Math.max(r.low - r.locked, 0)} stroke={c['--series-1']} strokeDasharray="3 4" strokeWidth={1} dot={false} isAnimationActive={false} />
+            {inRange.map((g, i) => (
+              <ReferenceLine key={g.id} x={snap(g.date)} stroke={risky(g) ? c['--critical'] : c['--good']} strokeWidth={risky(g) ? 2 : 1.5}
+                strokeDasharray={risky(g) ? undefined : '4 3'}
+                label={{ value: `${risky(g) ? '⚠ ' : ''}${g.label.length > 22 ? g.label.slice(0, 21) + '…' : g.label}`, position: 'top',
+                  offset: i % 2 ? 4 : 18, fill: risky(g) ? c['--critical'] : c['--ink-2'], fontSize: 11, fontWeight: risky(g) ? 700 : 400 }} />
+            ))}
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-ink-2">
+        <span className="inline-flex items-center gap-1.5"><span className="h-3 w-4 rounded-sm bg-accent/30" />{t('flow.available', {}, 'Available')}</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-3 w-4 rounded-sm" style={{ background: violet, opacity: 0.55 }} />{t('flow.locked_goals', {}, 'Set aside for goals')}</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-3 w-4 rounded-sm bg-muted/40" />{t('flow.pension_locked', {}, 'Pension (locked)')}</span>
+        <span className="inline-flex items-center gap-1.5"><span className="w-4 border-t border-dashed border-accent" />{t('flow.bad_case', {}, 'Bad case (1 in 10)')}</span>
+        {tl.goals.filter((g) => g.date > tl.end).map((g) => (
+          <span key={g.id} className="text-muted">→ {g.label}, {monthLabel(g.date, months())}</span>
+        ))}
+      </div>
     </div>
   )
 }
 
-function Step({ n, lv, on, onToggle, onWhy }: { n: number; lv: LeverCard; on: boolean; onToggle: (on: boolean) => void; onWhy: () => void }) {
+function Proposal({ lv, on, onToggle, onWhy }: { lv: LeverCard; on: boolean; onToggle: (on: boolean) => void; onWhy: () => void }) {
   const { t } = useT()
-  const gained = lv.months_gained ?? 0
+  const ai = lv.origin === 'agent'
   return (
-    <li className={`flex items-start gap-3 rounded-xl border p-3 transition ${on ? 'border-accent bg-accent-wash' : 'border-line'}`}>
+    <li className={`flex items-start gap-3 rounded-xl border p-2.5 transition ${on ? 'border-accent bg-accent-wash' : 'border-line bg-surface'}`}>
       <input type="checkbox" checked={on} onChange={(e) => onToggle(e.target.checked)} className="mt-1.5 h-4 w-4 accent-[var(--series-1)]" aria-label={lv.title} />
-      <span className="mt-0.5 w-5 text-sm font-semibold text-muted tabular">{n}.</span>
       <LeverIcon name={lv.icon} origin={lv.origin} />
       <div className="min-w-0 flex-1">
-        <div className="font-medium leading-snug">{lv.title}</div>
+        <div className="text-sm font-medium leading-snug">{lv.title}</div>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
-          {lv.impact_label && <Pill tone={gained > 0 || lv.delta_p > 0.005 ? 'good' : 'neutral'}>{lv.impact_label}</Pill>}
+          {ai && <Pill tone="llm"><Sparkles size={11} />{t('flow.ai_idea', {}, 'AI idea')}</Pill>}
+          {lv.impact_label && <Pill tone={(lv.months_gained ?? 0) > 0 || lv.delta_p > 0.005 ? 'good' : 'neutral'}>{lv.impact_label}</Pill>}
           {lv.monthly_equivalent !== 0 && <span className="text-xs text-ink-2 tabular">{lv.monthly_equivalent > 0 ? '+' : ''}{chf(lv.monthly_equivalent)}/{t('ui.month_short', {}, 'mo')}</span>}
           <Pill>{t(`effort.${lv.effort}`)}</Pill>
           <button onClick={onWhy} className="inline-flex items-center gap-1 text-xs text-accent hover:underline"><CircleHelp size={12} />{t('ui.why')}</button>
@@ -95,91 +94,99 @@ function Step({ n, lv, on, onToggle, onWhy }: { n: number; lv: LeverCard; on: bo
   )
 }
 
-/** Page 2: where the goal lands today, and the action plan that brings it back. Pro mode has everything else. */
-export function MainPage({ clientId, plan, cross, active, loading, onToggle, onWhy, onLever, onPro, onFacts, onGoals }: {
-  clientId: string; plan: PlanResponse; cross: CrossGoalEffect[]; active: string[]; loading: boolean
-  onToggle: (id: string, on: boolean) => void; onWhy: (id: string) => void; onLever: (id: string) => void
-  onPro: () => void; onFacts: () => void; onGoals: () => void
+/** A goal that fails in more than 1 of 10 futures: the risk, a proposal, the new chance, and "move the date". */
+function RiskCard({ g, tl, clientId, active, ideasLoading, onToggle, onWhy, onLever, onMove }: {
+  g: TimelineGoal; tl: Timeline; clientId: string; active: string[]; ideasLoading: boolean
+  onToggle: (id: string, on: boolean) => void; onWhy: (card: LeverCard) => void; onLever: (id: string) => void; onMove: (g: TimelineGoal) => void
 }) {
   const { t, months } = useT()
-  const b = plan.baseline, s = plan.scenario
-  const byId = new Map(plan.levers.map((l) => [l.lever_id, l]))
-  const steps = plan.plan.map((id) => byId.get(id)).filter((l): l is LeverCard => !!l)
-  const extra = active.map((id) => byId.get(id)).filter((l): l is LeverCard => !!l && !plan.plan.includes(l.lever_id))
-  const withPlan = active.length > 0
-  const late = b.months_late
-  const onTrack = b.p_success >= 0.7
+  const ids = [...g.proposal, ...active.filter((i) => !g.proposal.includes(i) && tl.cards[i])]
+  const cards = ids.map((i) => tl.cards[i]).filter(Boolean)
+  const okNow = 1 - g.p <= tl.alert_failure
+  const when = g.type === 'retirement' ? t('flow.at_age', { age: g.retirement_age ?? '' }, `at ${g.retirement_age}`) : monthLabel(g.date, months())
+  const moveLabel = g.move_to && (g.type === 'retirement' ? t('flow.at_age', { age: g.move_to.retirement_age ?? '' }, `at ${g.move_to.retirement_age}`) : monthLabel(g.move_to.date, months()))
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex items-start gap-3 bg-critical/10 px-4 py-3 text-critical">
+        <TriangleAlert size={20} className="mt-0.5 shrink-0" />
+        <div>
+          <div className="font-semibold">{g.label} · {when}</div>
+          <div className="text-sm">{t('flow.fail_chance', { pct: pct(1 - g.p_base) }, `As things are, a ${pct(1 - g.p_base)} chance you won't make it.`)}</div>
+        </div>
+      </div>
+      <div className="space-y-3 p-4">
+        <div className="text-sm font-medium">{t('flow.our_proposal', {}, 'Our proposal')}</div>
+        <ul className="space-y-2">
+          {cards.map((lv) => <Proposal key={lv.lever_id} lv={lv} on={active.includes(lv.lever_id)} onToggle={(on) => onToggle(lv.lever_id, on)} onWhy={() => onWhy(lv)} />)}
+          {ideasLoading && (
+            <li className="flex items-center gap-2 rounded-xl border border-dashed border-llm/40 p-2.5 text-sm text-llm">
+              <LoaderCircle size={14} className="animate-spin" />{t('flow.ai_thinking', {}, 'The AI is looking for ideas that fit you…')}
+            </li>
+          )}
+        </ul>
+        <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${okNow ? 'bg-good/10 text-good-text' : 'bg-critical/10 text-critical'}`}>
+          {okNow ? <CircleCheck size={16} /> : <TriangleAlert size={16} />}
+          {t('flow.with_ticked', { pct: pct(1 - g.p) }, `With the ticked actions: ${pct(1 - g.p)} chance of missing it.`)}
+          {g.p_proposal !== null && Math.abs(g.p_proposal - g.p) > 0.01 && (
+            <span className="font-normal text-ink-2">{t('flow.all_ticked', { pct: pct(1 - g.p_proposal) }, `(all proposed: ${pct(1 - g.p_proposal)})`)}</span>
+          )}
+        </div>
+        <WhatIfBox clientId={clientId} goalId={g.id} onLever={onLever} />
+        {g.move_to && moveLabel && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3 text-sm">
+            <CalendarPlus size={16} className="text-ink-2" />
+            <span className="text-ink-2">{t('flow.or_move', { when: moveLabel }, `Or move the date: ${moveLabel} makes it in 9 of 10 futures.`)}</span>
+            <button onClick={() => onMove(g)} className="rounded-lg border border-line px-2.5 py-1 font-medium hover:bg-surface-2">
+              {t('flow.move_to', { when: moveLabel }, `Move to ${moveLabel}`)}
+            </button>
+          </div>
+        )}
+      </div>
+    </Card>
+  )
+}
 
+/** Page 2: every goal on one timeline, and for each goal at risk what would bring it back. */
+export function MainPage({ clientId, tl, active, loading, ideasLoading, onToggle, onWhy, onLever, onMove, onPro, onFacts, onGoals }: {
+  clientId: string; tl: Timeline; active: string[]; loading: boolean; ideasLoading: Record<string, boolean>
+  onToggle: (id: string, on: boolean) => void; onWhy: (card: LeverCard) => void; onLever: (id: string) => void
+  onMove: (g: TimelineGoal) => void; onPro: () => void; onFacts: () => void; onGoals: () => void
+}) {
+  const { t, months } = useT()
+  const risky = tl.goals.filter((g) => g.at_risk)
   return (
     <div className={`mx-auto max-w-5xl space-y-4 px-4 py-6 transition-opacity ${loading ? 'opacity-60' : ''}`}>
       <Card className="p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-sm text-ink-2">{t('flow.scenario', {}, 'Scenario')}</div>
-            <h2 className="text-2xl font-semibold">{plan.goal.label}</h2>
-            <div className="text-sm text-muted">
-              {plan.goal.type === 'home' && `${chf(Number(plan.goal.params.price))} · `}
-              {plan.goal.type === 'target' && `${chf(Number(plan.goal.params.amount))} · `}
-              {t('ui.target')} {monthLabel(s.target_date, months())}
-            </div>
-          </div>
+          <h2 className="text-xl font-semibold">{t('flow.your_goals', {}, 'Your goals over time')}</h2>
           <button onClick={onGoals} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-ink-2 hover:bg-surface-2"><Pencil size={14} />{t('flow.change_goals', {}, 'Change goals')}</button>
         </div>
-
-        <div className="mt-4 flex flex-wrap items-end gap-x-8 gap-y-3">
-          <div>
-            <div className="text-sm text-ink-2">{onTrack ? t('ui.on_track', {}, 'On track') : t('flow.today_likely', {}, 'As things are, likely')}</div>
-            <div className="flex items-baseline gap-3">
-              <span className="text-4xl font-semibold tracking-tight">{monthLabel(b.achieved.p50, months())}</span>
-              {!onTrack && <span className="text-2xl font-bold text-critical">{delayLabel(late, t)}</span>}
-            </div>
-          </div>
-          {withPlan && (
-            <div>
-              <div className="text-sm text-ink-2">{t('flow.with_plan', {}, 'With your plan')}</div>
-              <div className="flex items-baseline gap-3">
-                <span className="text-4xl font-semibold tracking-tight text-good-text">{monthLabel(s.achieved.p50, months())}</span>
-                <span className="text-lg font-semibold text-ink-2">{delayLabel(s.months_late, t)}</span>
-              </div>
-            </div>
-          )}
-          <div className="min-w-[16rem] flex-1"><Futures n={s.futures_of_10} label={plan.texts.futures} /></div>
-        </div>
-
-        <div className="mt-4"><ScenarioChart plan={plan} withPlan={withPlan} /></div>
-        <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-ink-2">
-          <span className="inline-flex items-center gap-1.5"><span className={`h-0.5 w-4 ${withPlan ? 'border-t border-dashed border-muted' : 'bg-accent'}`} />{t('flow.today_path', {}, 'Today’s path')}</span>
-          {withPlan && <span className="inline-flex items-center gap-1.5"><span className="h-0.5 w-4 bg-accent" />{t('flow.with_plan', {}, 'With your plan')}</span>}
-          <span className="inline-flex items-center gap-1.5"><span className="h-0.5 w-4 bg-need" />{t('ui.need')}</span>
-          <span className="text-muted">{t('flow.median_note', {}, 'Middle of 1,000 simulated futures; Pro mode shows the whole range.')}</span>
-        </div>
+        <div className="mt-3"><GoalsChart tl={tl} /></div>
+        <ul className="mt-4 divide-y divide-line border-t border-line text-sm">
+          {tl.goals.map((g) => {
+            const Icon = g.type === 'home' ? House : ICON[g.kind]
+            const bad = 1 - g.p > tl.alert_failure
+            return (
+              <li key={g.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
+                <Icon size={16} className="text-ink-2" />
+                <span className="font-medium">{g.label}</span>
+                <span className="text-ink-2">{g.type === 'retirement' ? t('flow.at_age', { age: g.retirement_age ?? '' }, `at ${g.retirement_age}`) : monthLabel(g.date, months())}</span>
+                {g.amount !== null && g.type !== 'retirement' && <span className="text-ink-2 tabular">{chf(g.amount)}</span>}
+                {g.kind === 'save' && <Pill tone="neutral"><Lock size={11} />{t('flow.kept_saved', {}, 'kept saved')}</Pill>}
+                <span className={`ml-auto inline-flex items-center gap-1 font-medium ${bad ? 'text-critical' : 'text-good-text'}`}>
+                  {bad ? <TriangleAlert size={14} /> : <CircleCheck size={14} />}
+                  {t('flow.chance', { pct: pct(g.p) }, `${pct(g.p)} likely`)}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
       </Card>
 
-      <Card className="p-5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="flex items-center gap-2 text-lg font-semibold"><ListChecks size={18} />{t('flow.action_plan', {}, 'Action plan')}</h2>
-          {plan.plan_p_success !== null && (
-            <span className="text-sm text-ink-2">{t('flow.plan_odds', { n: Math.round(plan.plan_p_success * 10) }, `All steps: ${Math.round(plan.plan_p_success * 10)} of 10 futures reach the goal`)}</span>
-          )}
-        </div>
-        {steps.length === 0 ? (
-          <p className="mt-3 text-sm text-ink-2">{onTrack ? t('flow.nothing_needed', {}, 'You are on track: nothing needs to change. Pro mode shows ways to get there even sooner.') : t('flow.no_plan', {}, 'No single change closes this gap. Pro mode shows every option, or change the goal.')}</p>
-        ) : (
-          <ol className="mt-3 space-y-2">
-            {steps.map((lv, i) => <Step key={lv.lever_id} n={i + 1} lv={lv} on={active.includes(lv.lever_id)} onToggle={(on) => onToggle(lv.lever_id, on)} onWhy={() => onWhy(lv.lever_id)} />)}
-            {extra.map((lv, i) => <Step key={lv.lever_id} n={steps.length + i + 1} lv={lv} on onToggle={(on) => onToggle(lv.lever_id, on)} onWhy={() => onWhy(lv.lever_id)} />)}
-          </ol>
-        )}
-        <div className="mt-3 flex items-center gap-2 text-sm text-ink-2"><CalendarClock size={16} aria-hidden />{plan.texts.deadline}</div>
-        {cross.length > 0 && (
-          <ul className="mt-3 space-y-1 border-t border-line pt-3 text-sm text-ink-2">
-            {cross.map((x) => <li key={`${x.source_goal_id}-${x.goal_id}`} className="flex gap-2"><span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${x.delta_months && x.delta_months > 0 ? 'bg-critical' : 'bg-grid'}`} />{x.text}</li>)}
-          </ul>
-        )}
-        <div className="mt-4 border-t border-line pt-4">
-          <WhatIfBox clientId={clientId} goalId={plan.goal.id} onLever={onLever} />
-        </div>
-      </Card>
+      {risky.map((g) => (
+        <RiskCard key={g.id} g={g} tl={tl} clientId={clientId} active={active} ideasLoading={!!ideasLoading[g.id]}
+          onToggle={onToggle} onWhy={onWhy} onLever={onLever} onMove={onMove} />
+      ))}
 
       <div className="flex justify-between pb-16">
         <button onClick={onFacts} className="inline-flex items-center gap-1.5 text-sm text-accent hover:underline"><Database size={14} />{t('flow.see_data', {}, "See the data we're working with")}</button>

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Literal
 
 import numpy as np
 from pydantic import BaseModel
@@ -13,6 +14,7 @@ from .base import GoalEval, register_goal
 class TargetParams(BaseModel):
     amount: float                    # today's CHF
     include_invested: bool = True
+    kind: Literal["spend", "save"] = "spend"   # spend: paid out at the date; save: "have X set aside", kept but locked
 
 
 @register_goal("target")

@@ -33,7 +33,8 @@ uv run --extra debug-ui streamlit run scripts/debug_ui.py
 
 # Container (OpenShift-style: non-root, one port, env config)
 docker compose up --build        # picks up .env automatically
-# or: podman build -t mygoal . && podman run -p 8080:8080 --env-file .env mygoal
+# or: podman build --format docker -t mygoal . && podman run -p 8080:8080 --env-file .env mygoal
+#     (--format docker keeps the HEALTHCHECK; package downloads are cached between builds)
 ```
 
 **LLM (optional).** `LLM_PROVIDER=auto` uses Claude when `ANTHROPIC_API_KEY` (or an `ant auth login` profile) is

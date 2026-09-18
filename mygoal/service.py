@@ -120,6 +120,9 @@ class ClientState:
     ai_suggested: bool = False             # the LLM already proposed goals for this client
     ai_facts: dict[str, Any] = field(default_factory=dict)      # cached LLM reading of the data, per language
     lock: Any = field(default_factory=threading.Lock)            # one LLM job per client at a time (pages call twice)
+    goals_lock: Any = field(default_factory=threading.Lock)      # goal list edits (suggestions merge while the client clicks)
+    dismissed: set = field(default_factory=set)                  # suggestions the client deleted: never suggest them again
+    ai_ideas: dict[str, list[str]] = field(default_factory=dict) # goal id -> custom lever ids the AI proposed for it
 
 
 def _h(obj: Any) -> str:
@@ -149,20 +152,35 @@ class PlanningService:
             self.clients[client_id] = ClientState(ds=ds, profile=profile, goals=list(ds.client.goals), risk=risk)
         return self.clients[client_id]
 
+    def refresh_client(self, client_id: str) -> None:
+        """Rebuild the profile after the client corrected master data (age, canton): every number depends on it."""
+        st = self.state(client_id)
+        st.profile = build_profile(st.ds, self.cfg)
+        pop = self.services.get("population")
+        st.risk = pop.risk_for(st.ds, st.profile) if pop is not None else None
+        st.version += 1
+        self._planners.clear()
+        self._rankings.clear()
+
     def upsert_goal(self, client_id: str, goal: GoalSpec) -> list[GoalSpec]:
         st = self.state(client_id)
         GOALS.get(goal.type)  # validates the type
         parse_params(GOALS.get(goal.type), goal)
-        ids = [g.id for g in st.goals]
-        st.goals = [goal if g.id == goal.id else g for g in st.goals] if goal.id in ids else [*st.goals, goal]
-        st.version += 1
-        return st.goals
+        with st.goals_lock:
+            ids = [g.id for g in st.goals]
+            st.goals = [goal if g.id == goal.id else g for g in st.goals] if goal.id in ids else [*st.goals, goal]
+            st.version += 1
+            return list(st.goals)
 
     def delete_goal(self, client_id: str, goal_id: str) -> list[GoalSpec]:
         st = self.state(client_id)
-        st.goals = [g for g in st.goals if g.id != goal_id]
-        st.version += 1
-        return st.goals
+        with st.goals_lock:
+            gone = [g for g in st.goals if g.id == goal_id]
+            st.dismissed |= {(g.type, g.label.lower()) for g in gone}
+            st.goals = [g for g in st.goals if g.id != goal_id]
+            st.ai_ideas.pop(goal_id, None)
+            st.version += 1
+            return list(st.goals)
 
     def add_custom_lever(self, client_id: str, lever: CustomLever) -> CustomLever:
         st = self.state(client_id)

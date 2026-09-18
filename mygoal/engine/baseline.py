@@ -69,20 +69,34 @@ def build_baseline(profile: Profile, client: Client, cfg: Config, book: Assumpti
                         source="transactions", unit="CHF/month", step=50,
                         note=f"Without one-off bills over CHF {risk.bill_threshold:,.0f} (about CHF {lumpy:,.0f}/month): "
                              "they are simulated as random shocks".replace(",", "'") if lumpy > 0 else None)
+    # facts the client can correct on the facts page: each edit moves the matching total
+    profile_housing, profile_car = profile.monthly("housing"), profile.monthly("transport_car")
+    housing = book.get("housing_monthly", profile_housing, label="Housing costs per month (rent or mortgage)",
+                       source="transactions", unit="CHF/month", step=50)
+    car = book.get("car_monthly", profile_car, label="Car costs per month", source="transactions", unit="CHF/month", step=10)
+    fixed += housing - profile_housing
+    variable += car - profile_car
+    other_income = book.get("other_income_monthly", profile.income.other_income_monthly, label="Other income per month",
+                            source="transactions", unit="CHF/month", step=50)
+    contrib_p3a = book.get("contrib_p3a_monthly", profile.saving_contrib_monthly.get("p3a", 0.0),
+                           label="Pillar 3a payments per month", source="transactions", unit="CHF/month", step=50)
+    cash = book.get("cash", profile.balances.liquid, label="Cash on your accounts", source="transactions", step=1000)
+    invested = book.get("invested", profile.balances.invested, label="Investments", source="client_data", step=1000)
+    p3a = book.get("p3a_balance", profile.balances.p3a, label="Pillar 3a savings", source="client_data", step=1000)
     bvg = cfg["pension"]["bvg"]
     gross = profile_values.get("gross_income_annual", profile.income.gross_annual)
     p2 = profile_values.get("pillar2_balance", profile.balances.p2)
     insured = client.pension.pillar2_insured_salary or max(0.0, min(gross, bvg["max_insured_salary"]) - bvg["coordination_deduction"])
     return Baseline(
         client_id=client.id, start=start, birth_year=client.birth_year, age=float(profile.age or 40), canton=client.canton,
-        cash=profile.balances.liquid, invested=profile.balances.invested, p3a=profile.balances.p3a, p2=p2,
-        salary_net_monthly=net, other_income_monthly=profile.income.other_income_monthly, gross_income_annual=gross,
+        cash=cash, invested=invested, p3a=p3a, p2=p2,
+        salary_net_monthly=net, other_income_monthly=other_income, gross_income_annual=gross,
         fixed_costs_monthly=fixed, variable_costs_monthly=variable,
-        contrib_p3a_monthly=profile.saving_contrib_monthly.get("p3a", 0.0),
+        contrib_p3a_monthly=contrib_p3a,
         contrib_invested_monthly=profile.saving_contrib_monthly.get("invested", 0.0),
         buffer_reserve=buffer_months * fixed, p2_insured_salary=insured,
         p2_age_credits={int(k): float(v) for k, v in bvg["age_credits"].items()},
-        housing_monthly=profile.monthly("housing"),
+        housing_monthly=housing,
         spending_by_category={f.category: f.monthly for f in profile.flows if f.kind == "spending"},
         portfolio=cfg.get_path("market.default_portfolio", "balanced"),
         p3a_portfolio=cfg.get_path("market.p3a_default_portfolio", "balanced"),

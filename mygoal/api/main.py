@@ -75,6 +75,12 @@ class DraftRequest(BaseModel):
     answer: str | None = None
 
 
+class TimelineRequest(BaseModel):
+    active: list[str] = []
+    overrides: dict[str, dict[str, float]] = {}
+    lang: str = "en"
+
+
 class FactsRequest(BaseModel):
     overrides: dict[str, dict[str, float]] = {}
     lang: str = "en"
@@ -168,6 +174,25 @@ def draft_goal(client_id: str, req: DraftRequest):
     _client(client_id)
     from ..agent.goal_assistant import draft
     return draft(svc(), client_id, req.text, req.lang, req.question, req.answer)
+
+
+@app.post("/api/clients/{client_id}/timeline")
+def timeline(client_id: str, req: TimelineRequest):
+    """All confirmed goals on one chart, each goal's chance, and a proposal for the ones at risk."""
+    _client(client_id)
+    from .. import timeline as tl
+    return tl.build(svc(), client_id, req.active, req.overrides, req.lang)
+
+
+@app.post("/api/clients/{client_id}/goals/{goal_id}/ideas")
+def goal_ideas(client_id: str, goal_id: str, req: LangRequest):
+    """The AI's ad-hoc ideas for one goal, registered as levers (slow: an LLM call). Cached per goal."""
+    _client(client_id)
+    from ..agent.goal_assistant import ideas
+    try:
+        return ideas(svc(), client_id, goal_id, req.lang)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
 
 
 @app.post("/api/clients/{client_id}/facts")

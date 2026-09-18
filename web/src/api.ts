@@ -34,6 +34,36 @@ export type DraftResult =
   | { status: 'goal'; goal: GoalSpec }
   | { status: 'error'; message: string }
 
+export interface TimelineGoal {
+  id: string
+  label: string
+  type: string
+  kind: 'spend' | 'save' | 'retirement'
+  date: string
+  amount: number | null
+  retirement_age: number | null
+  p_base: number
+  p: number
+  at_risk: boolean
+  proposal: string[]
+  p_proposal: number | null
+  move_to: { date: string; retirement_age: number | null } | null
+}
+
+/** All confirmed goals on one chart (mygoal/timeline.py). */
+export interface Timeline {
+  dates: string[]
+  free: number[]
+  free_low: number[]
+  locked: number[]
+  pension: number[]
+  start: string
+  end: string
+  goals: TimelineGoal[]
+  cards: Record<string, LeverCard>
+  alert_failure: number
+}
+
 export interface Fact {
   id: string
   group: 'money' | 'life' | 'future' | 'notes'
@@ -323,4 +353,8 @@ export const api = {
     call<{ reply: string; changed: string[]; overrides: Overrides; facts: Facts }>(`/clients/${client}/facts/chat`,
       { method: 'POST', body: JSON.stringify({ message, overrides, lang }) }),
   factsReading: (client: string, lang: string) => call<FactsReading>(`/clients/${client}/facts/ai?lang=${lang}`),
+  timeline: (client: string, body: { active: string[]; overrides: Overrides; lang: string }, signal?: AbortSignal) =>
+    call<Timeline>(`/clients/${client}/timeline`, { method: 'POST', body: JSON.stringify(body), signal }),
+  goalIdeas: (client: string, goal: string, lang: string) =>
+    call<{ ids: string[] }>(`/clients/${client}/goals/${goal}/ideas`, { method: 'POST', body: JSON.stringify({ lang }) }),
 }

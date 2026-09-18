@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("mygoal.facts")
 
-FUTURE_KEYS = ["job_loss_prob", "big_bill_rate", "buffer_months", "inflation", "real_wage_growth", "portfolio_return",
+FUTURE_KEYS = ["job_loss_prob", "buffer_months", "inflation", "real_wage_growth", "portfolio_return",
                "house_price_growth", "cash_rate"]
 
 
@@ -57,56 +57,58 @@ def build(svc: "PlanningService", client_id: str, overrides: dict | None = None,
                      a.editable, "number", a.note, low=a.low, high=a.high, step=a.step)
 
     # ---- money: in - out = free cash (the sketch's first box) ----
-    lumpy = st.risk.personal_bill_monthly if st.risk is not None else 0.0
+    bills = st.risk.bill_mean * market.bill_rate / 12 if st.risk is not None else 0.0   # expected one-off bills
     money_in = base.salary_net_monthly + base.other_income_monthly
-    money_out = base.fixed_costs_monthly + base.variable_costs_monthly + lumpy
+    money_out = base.fixed_costs_monthly + base.variable_costs_monthly + bills
+
+    def shown(f: dict | None, display: str | None = None, label: str | None = None) -> dict | None:
+        if f is not None:
+            f.update({k: v for k, v in (("display", display), ("label", label)) if v is not None})
+        return f
+
     money = [f for f in [
         from_book("salary_net_monthly", "money"),
-        _fact("k:other_income", "money", "known", "Other income per month", chf(base.other_income_monthly) + "/month", lang,
-              "transactions", base.other_income_monthly) if base.other_income_monthly > 1 else None,
+        from_book("other_income_monthly", "money"),
         from_book("fixed_costs_monthly", "money"),
         from_book("variable_costs_monthly", "money"),
-        _fact("k:bills", "money", "known", "One-off bills over CHF 1'000 (average)", chf(lumpy) + "/month", lang, "transactions",
-              lumpy) if lumpy > 1 else None,
-        _fact("k:cash", "money", "known", "Cash on your accounts", chf(p.balances.liquid), lang, "transactions", p.balances.liquid),
-        _fact("k:invested", "money", "known", "Investments", chf(p.balances.invested), lang, "client_data",
-              p.balances.invested) if p.balances.invested > 0 else None,
-        _fact("k:p3a", "money", "known", "Pillar 3a", chf(p.balances.p3a), lang, "client_data", p.balances.p3a) if p.balances.p3a > 0 else None,
+        shown(from_book("big_bill_rate", "money"),
+              display=f"{market.bill_rate:.1f} × ~{chf(st.risk.bill_mean)} ≈ {chf(bills)}/month") if st.risk is not None else None,
+        from_book("cash", "money"),
+        from_book("invested", "money"),
+        from_book("p3a_balance", "money"),
         from_book("pillar2_balance", "money"),
         from_book("gross_income_annual", "money"),
     ] if f]
 
-    # ---- life ----
+    # ---- life: everything editable; master data changes rebuild the profile ----
     kids = c.household.children_birth_years
     hh_src = "user" if x.get("household_edited") else "client_data"
+    cd = lambda field: "user" if field in x.get("edited", []) else "client_data"  # noqa: E731
+    kind = lambda src: "yours" if src == "user" else "known"  # noqa: E731
+    housing, car, p3a_pay = (book[k].value if k in book else 0.0 for k in ("housing_monthly", "car_monthly", "contrib_p3a_monthly"))
     life = [
-        _fact("k:who", "life", "known", "Age and canton", f"{p.age}, {c.canton or '?'}" + (f" ({x['city']})" if x.get("city") else ""),
-              lang, "client_data"),
-        _fact("h:adults", "life", "yours" if hh_src == "user" else "known", "Adults in the household", str(c.household.adults),
+        _fact("c:age", "life", kind(cd("age")), "Age", str(p.age), lang, cd("age"), p.age, "", True, "number", low=0, high=100, step=1),
+        _fact("c:canton", "life", kind(cd("canton")), "Canton", (c.canton or "?") + (f" ({x['city']})" if x.get("city") else ""),
+              lang, cd("canton"), c.canton or "", "", True, "text", "Two letters, e.g. ZH"),
+        _fact("h:adults", "life", kind(hh_src), "Adults in the household", str(c.household.adults),
               lang, hh_src, c.household.adults, "", True, "number", "Married or living together counts as 2", low=1, high=2, step=1),
-        _fact("h:children", "life", "yours" if hh_src == "user" else "known", "Children", str(len(kids)) +
+        _fact("h:children", "life", kind(hh_src), "Children", str(len(kids)) +
               (f" (born {', '.join(map(str, kids))})" if kids else ""), lang, hh_src, len(kids), "", True, "number",
               low=0, high=6, step=1),
+        _fact("c:work", "life", kind(cd("work")), "Work", " · ".join(v for v in [
+            str(x.get("employment_type") or "").replace("_", "-"), x.get("occupation") or "", x.get("sector") or ""] if v) or "?",
+            lang, cd("work"), x.get("occupation") or "", "", True, "text"),
+        shown(from_book("housing_monthly", "life"), label="Home",
+              display=(("You own your home" if x.get("owns_property") else "You rent") + f": {chf(housing)}/month") if housing
+              else ("You own your home" if x.get("owns_property") else "No housing costs seen")),
+        shown(from_book("car_monthly", "life"), label="Car",
+              display=f"You have a car: about {chf(car)}/month" if car > 1 else "No car costs seen"),
+        shown(from_book("contrib_p3a_monthly", "life"), label="Pillar 3a",
+              display=f"You pay {chf(p3a_pay)}/month into pillar 3a" if p3a_pay > 1 else "No pillar 3a payments seen"),
+        _fact("c:interests", "life", kind(cd("interests")), "Interests", ", ".join(x.get("interests") or []) or "?", lang,
+              cd("interests"), ", ".join(x.get("interests") or []), "", True, "text", "Comma separated"),
     ]
-    if x.get("employment_type") or x.get("occupation"):
-        life.append(_fact("k:work", "life", "known", "Work", " · ".join(v for v in [
-            str(x.get("employment_type") or "").replace("_", "-"), x.get("occupation") or "", x.get("sector") or ""] if v), lang,
-            "client_data"))
-    if x.get("owns_property"):
-        life.append(_fact("k:home", "life", "known", "Home", "You own your home", lang, "client_data"))
-    elif p.monthly("housing") > 0:
-        life.append(_fact("k:home", "life", "known", "Home", f"You rent: {chf(p.monthly('housing'))}/month", lang, "transactions"))
-    for h in p.hints:
-        if h.kind == "car":
-            life.append(_fact("k:car", "life", "known", "Car", f"You have a car: about {chf(h.monthly_cost)}/month", lang,
-                              "transactions", note=", ".join(h.evidence[:3])))
-        elif h.kind == "pillar3a":
-            life.append(_fact("k:3a", "life", "known", "Pillar 3a", f"You pay {chf(h.monthly_cost)}/month into pillar 3a", lang,
-                              "transactions"))
-        elif h.kind == "no_pillar3a":
-            life.append(_fact("k:3a", "life", "known", "Pillar 3a", "No pillar 3a payments seen", lang, "transactions"))
-    if x.get("interests"):
-        life.append(_fact("k:interests", "life", "known", "Interests", ", ".join(x["interests"]), lang, "client_data"))
+    life = [f for f in life if f]
 
     future = [f for f in (from_book(k, "future") for k in FUTURE_KEYS) if f]
     notes = [_fact(f"n:{n['id']}", "notes", "yours", "You told us", n["text"], lang, "user", n["text"], "", True, "text")
@@ -130,6 +132,23 @@ def apply(svc: "PlanningService", client_id: str, fact_id: str, value: Any, over
             glob.pop(key, None)
         else:
             glob[key] = float(value)
+        return overrides
+    if fact_id.startswith("c:"):                       # master data: rebuild the profile, every number depends on it
+        field_ = fact_id[2:]
+        c, text = st.ds.client, str(value if value is not None else "").strip()
+        if field_ == "age":
+            c.birth_year = st.profile.as_of.year - max(0, min(int(float(text)), 110))
+        elif field_ == "canton":
+            c.canton = text.upper()[:2] or c.canton
+        elif field_ == "work":
+            c.extra["occupation"] = text
+        elif field_ == "interests":
+            c.extra["interests"] = [w.strip() for w in text.split(",") if w.strip()]
+        else:
+            raise ValueError(f"not editable: {fact_id}")
+        c.extra["edited"] = sorted(set(c.extra.get("edited", [])) | {field_})
+        svc.refresh_client(client_id)
+        st.ai_facts.clear()
         return overrides
     if fact_id == "h:adults":
         hh.adults = max(1, min(int(float(value)), 2))
