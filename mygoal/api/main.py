@@ -8,8 +8,9 @@ import logging
 import os
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -20,6 +21,7 @@ from ..config import ROOT
 from ..levers import PRIMITIVES
 from ..llm import llm_status
 from ..model import GoalSpec
+from ..partner_api import CONNECTORS, FORMAT, ImportResult, descriptor, partner, prompt, reply_schema, request
 from ..service import CustomLever, PlanningService, PlanRequest, PlanResponse
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -164,6 +166,14 @@ def upsert_goal(client_id: str, goal_id: str, goal: GoalSpec):
         raise HTTPException(422, str(exc)) from exc
 
 
+@app.post("/api/clients/{client_id}/reset")
+def reset_client(client_id: str):
+    """Start this client over from the data: goals, dismissed suggestions, what-ifs, facts and integrations."""
+    _client(client_id)
+    svc().reset_client(client_id)
+    return {"ok": True}
+
+
 @app.get("/api/clients/{client_id}/goals")
 def goals(client_id: str, lang: str = "en"):
     _client(client_id)
@@ -283,6 +293,112 @@ def remove_lever(client_id: str, lever_id: str):
     _client(client_id)
     svc().remove_custom_lever(client_id, lever_id)
     return {"ok": True}
+
+
+# ---- the "manual API": options from other companies' assistants (mygoal/partner_api) ----
+class ScenarioPaste(BaseModel):
+    goal_id: str
+    text: str
+    lang: str = "en"
+
+
+class IntegrationAsk(BaseModel):
+    goal_id: str
+    lang: str = "en"
+
+
+class IntegrationConnect(BaseModel):
+    url: str
+
+
+@app.get("/api/partner-prompt")
+def partner_prompt(lang: str = "en"):
+    """The text the client copies into another company's chatbot. The same for everyone: it carries no client data."""
+    return {"prompt": prompt(lang)}
+
+
+@app.get("/api/scenario-format")
+def scenario_format(lang: str = "en"):
+    """For companies building a compatible API: what they receive, what they publish, what they answer."""
+    return {"format": FORMAT, "you_receive": request(lang, customer_ref="<the customer's account link with you>"),
+            "you_publish": descriptor("Your company", "<where to POST, relative to this description; empty = same address>"),
+            "you_answer": reply_schema(), "instructions": prompt(lang)}
+
+
+@app.post("/api/clients/{client_id}/scenarios/import", response_model=ImportResult)
+def import_scenarios(client_id: str, req: ScenarioPaste):
+    """The other assistant's answer, pasted by the client."""
+    _client(client_id)
+    try:
+        return svc().partners.import_reply(req.text, client_id=client_id, goal_id=req.goal_id, lang=req.lang)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@app.get("/api/clients/{client_id}/integrations")
+def integrations(client_id: str, lang: str = "en"):
+    """The client's connected integrations, each with exactly what we would send it."""
+    _client(client_id)
+    return svc().partners.view(client_id, lang)
+
+
+@app.post("/api/clients/{client_id}/integrations")
+def connect_integration(client_id: str, req: IntegrationConnect, lang: str = "en"):
+    """Check that the address belongs to a compatible API, then add it to the client's integrations."""
+    _client(client_id)
+    try:
+        svc().partners.connect(client_id, req.url)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return svc().partners.view(client_id, lang)
+
+
+@app.delete("/api/clients/{client_id}/integrations/{integration_id}")
+def disconnect_integration(client_id: str, integration_id: str, lang: str = "en"):
+    _client(client_id)
+    svc().partners.disconnect(client_id, integration_id)
+    return svc().partners.view(client_id, lang)
+
+
+@app.post("/api/clients/{client_id}/integrations/{integration_id}/ask", response_model=ImportResult)
+def ask_integration(client_id: str, integration_id: str, req: IntegrationAsk):
+    """Send the request to a connected API and turn its answer into actions."""
+    _client(client_id)
+    if integration_id not in svc().partners.integrations(client_id):
+        raise HTTPException(404, f"unknown integration {integration_id}")
+    try:
+        return svc().partners.ask(client_id, req.goal_id, integration_id, req.lang)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except Exception as exc:                      # the company's API is down or answered nonsense
+        log.warning("integration %s failed: %s", integration_id, exc)
+        raise HTTPException(502, f"{integration_id}: {exc}") from exc
+
+
+@app.get("/api/demo-partners/{partner_id}")
+def demo_partner_description(partner_id: str):
+    """A demo company's published description: what makes it a compatible integration."""
+    p = _demo_partner(partner_id)
+    return descriptor(p["name"])
+
+
+@app.post("/api/demo-partners/{partner_id}")
+def demo_partner(partner_id: str, body: dict[str, Any] = Body(...)):
+    """A demo company's own API: the request in, its options out (reached through the http connector)."""
+    p = _demo_partner(partner_id)
+    return CONNECTORS.get(p["connector"])(body, p, svc())
+
+
+def _demo_partner(partner_id: str) -> dict[str, Any]:
+    try:
+        p = partner(svc().cfg, partner_id)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if p["connector"] == "http":
+        raise HTTPException(404, "not a demo partner")
+    return p
 
 
 @app.get("/api/clients/{client_id}/advisor")

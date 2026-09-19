@@ -1,0 +1,13 @@
+# Integrations: other companies whose API speaks the scenario format (mygoal/partner_api). Everyone else is reached by
+# copy/paste: the page shows a text for their chatbot and reads the JSON it answers.
+# activated: true = the client connected it before, so it is listed right away. connector: a name registered with
+# @connector (mock_insurer, mock_competitor, http + url). A new one is connected on the page from its address.
+partners:
+  - id: alpenschutz
+    name: Alpenschutz Krankenkasse (demo)
+    connector: mock_insurer        # the client's current health insurer
+    activated: true
+  - id: rigi
+    name: Rigi Krankenkasse (demo)
+    connector: mock_competitor     # another insurer, not connected yet: connect it on the page with the address
+    price_factor: 0.92             #   <app address>/api/demo-partners/rigi (its description; it answers there too)

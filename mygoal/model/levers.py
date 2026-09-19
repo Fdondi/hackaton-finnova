@@ -143,7 +143,7 @@ class LeverImpact(BaseModel):
     effort: Literal["none", "low", "medium", "high"] = "low"
     product_trigger: str | None = None   # advisor view only: "mortgage", "3a", "investment_plan", ...
     excludes: list[str] = Field(default_factory=list)
-    origin: Literal["builtin", "specialist", "agent", "user"] = "builtin"
+    origin: Literal["builtin", "specialist", "agent", "user", "partner"] = "builtin"
     headline_monthly: float | None = None   # CHF/month shown on the card, when meaningful
     settings: dict[str, str | float] = Field(default_factory=dict)   # scenario-level switches, e.g. {"portfolio": "balanced"}
     details: dict[str, Any] = Field(default_factory=dict)            # specialist data for the "Why?" drawer (tables, options)

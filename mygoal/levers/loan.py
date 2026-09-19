@@ -149,7 +149,8 @@ def suggested_rate(ctx: LeverContext) -> tuple[float, list[dict], float]:
 
 
 def make_loan(ctx: LeverContext, *, lever_id: str, title: str, amount: float, at: date,
-              finances: str, label: str, rate: float | None = None, term: int | None = None) -> LeverImpact | None:
+              finances: str, label: str, rate: float | None = None, term: int | None = None,
+              invest_return: float | None = None) -> LeverImpact | None:
     """Cash in at `at`, then a fixed installment. Off unless the client switches it on."""
     cfg = _cfg(ctx)
     min_p, max_p = float(cfg.get("min_principal", 3000)), float(cfg.get("max_principal", 80000))
@@ -183,6 +184,10 @@ def make_loan(ctx: LeverContext, *, lever_id: str, title: str, amount: float, at
         f"(interest about {fmt_chf(pmt * term - principal)} on {fmt_chf(principal)}).",
         *(f"{row['title']}: {row['text']}" for row in sources),
     ]
+    if invest_return is not None:
+        verdict = ("below" if invest_return < rate else "above")
+        notes.append(f"Borrowing to invest: the loan costs {rate:.1%}/year, the investment is expected to earn "
+                     f"{invest_return:.1%}/year ({verdict} the interest). The return is uncertain, the interest is not.")
     if amount > max_p:
         notes.append(f"The expense is {fmt_chf(amount)}; we only offer to finance {fmt_chf(principal)} (typical consumer-loan cap).")
     return LeverImpact(
@@ -218,21 +223,23 @@ def finance_with_loan(ctx: LeverContext):
 
 
 def companions(ctx: LeverContext, levers: list[LeverImpact]) -> list[LeverImpact]:
-    """A separate loan action for a large cash purchase on another lever (farm, equipment, …)."""
+    """A separate loan action for a large cash purchase or investment on another lever (farm, equipment, fund, …)."""
     cfg = _cfg(ctx)
     min_p = float(cfg.get("min_principal", 3000))
     out = []
     for lv in levers:
         if lv.debts or lv.details.get("needs_agreement") or lv.product_trigger == "loan":
             continue
-        if lv.group in ("life_event", "goal_change"):
-            continue
-        outs = [(o, -o.amount.mean()) for o in lv.one_offs if o.bucket == "cash" and o.amount.mean() <= -min_p]
+        if lv.group in ("life_event", "goal_change") or lv.lever_id == "invest_idle_cash":
+            continue   # idle cash is money the client already has: borrowing to invest it makes no sense
+        outs = [(o.at, -o.amount.mean(), None) for o in lv.one_offs if o.bucket == "cash" and o.amount.mean() <= -min_p]
+        outs += [(i.start, i.once.mean(), i.expected_return) for i in lv.investments
+                 if i.once is not None and i.from_bucket == "cash" and i.once.mean() >= min_p]
         if not outs:
             continue
-        o, principal = max(outs, key=lambda x: x[1])
+        at, principal, ret = max(outs, key=lambda x: x[1])
         loan = make_loan(ctx, lever_id=f"loan:{lv.lever_id}", title=f"Finance “{lv.title}” with a loan",
-                         amount=principal, at=o.at, finances=lv.lever_id, label=lv.title)
+                         amount=principal, at=at, finances=lv.lever_id, label=lv.title, invest_return=ret)
         if loan:
             out.append(loan)
     return out

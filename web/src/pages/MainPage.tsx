@@ -1,9 +1,10 @@
-import { CalendarClock, CircleCheck, Database, FileText, Gauge, House, LoaderCircle, Lock, Pencil, PiggyBank, Sparkles, Star, Target, Trash2, TreePalm, TriangleAlert, X } from 'lucide-react'
+import { CalendarClock, CircleCheck, Database, FileText, Gauge, Handshake, House, LoaderCircle, Lock, Pencil, PiggyBank, Sparkles, Star, Target, Trash2, TreePalm, TriangleAlert, X } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { GoalSpec, LeverCard, Timeline, TimelineGoal } from '../api'
 import { GoalEditor } from '../components/GoalEditor'
 import { useTokens } from '../components/tokens'
+import { ScenarioBox } from '../components/ScenarioBox'
 import { WhatIfBox } from '../components/WhatIfBox'
 import { Card, LeverIcon, Pill } from '../components/ui'
 import { chf, chfCompact, monthLabel, onceAmount } from '../format'
@@ -151,6 +152,7 @@ function ActionRow({ lv, on, recommended, gain, maxGain, onToggle, onDetails, on
           {recommended && <Pill tone="good"><Star size={11} />{t('flow.recommended', {}, 'Recommended')}</Pill>}
           {agree && <Pill tone="warning" title={lv.description}><TriangleAlert size={11} />{t('flow.needs_agreement', {}, 'Needs your agreement')}</Pill>}
           {lv.origin === 'agent' && <Pill tone="llm"><Sparkles size={11} />{t('flow.ai_idea', {}, 'AI idea')}</Pill>}
+          {lv.origin === 'partner' && <Pill tone="warning" title={t('partners.from_hint', {}, 'Figures from another company: please check')}><Handshake size={11} />{String(lv.details.partner ?? '')}</Pill>}
           {lv.monthly_equivalent !== 0 && <span className="text-xs text-ink-2 tabular">{lv.monthly_equivalent > 0 ? '+' : ''}{chf(lv.monthly_equivalent)}/{t('ui.month_short', {}, 'mo')}</span>}
           {onceAmount(lv.details) !== 0 && <span className="text-xs text-ink-2 tabular">{chf(onceAmount(lv.details))} {t('flow.once_short', {}, 'once')}</span>}
           {lv.effort && <Pill>{t(`effort.${lv.effort}`)}</Pill>}
@@ -171,10 +173,10 @@ function ActionRow({ lv, on, recommended, gain, maxGain, onToggle, onDetails, on
 }
 
 /** Actions for the goal in focus: each with a 💵 impact mark (scaled to the strongest action, frozen so it never moves). */
-function ActionsCard({ tl, clientId, active, listed, ideasLoading, onToggle, onActivateAll, onDelete, onDetails, onLever, onMoreIdeas }: {
+function ActionsCard({ tl, clientId, active, listed, ideasLoading, onToggle, onActivateAll, onDelete, onDetails, onLever, onScenarios, onMoreIdeas }: {
   tl: Timeline; clientId: string; active: string[]; listed: string[]; ideasLoading: boolean
   onToggle: (id: string, on: boolean) => void; onActivateAll: (ids: string[]) => void; onDelete: (id: string) => void
-  onDetails: (id: string) => void; onLever: (id: string) => void; onMoreIdeas: () => void
+  onDetails: (id: string) => void; onLever: (id: string) => void; onScenarios: (ids: string[]) => void; onMoreIdeas: () => void
 }) {
   const { t, months } = useT()
   const a = tl.actions!
@@ -222,6 +224,7 @@ function ActionsCard({ tl, clientId, active, listed, ideasLoading, onToggle, onA
         </button>
       </div>
       <div className="mt-3"><WhatIfBox clientId={clientId} goalId={a.goal_id} onLever={onLever} /></div>
+      <div className="mt-3"><ScenarioBox clientId={clientId} goalId={a.goal_id} onScenarios={onScenarios} /></div>
       <div className={`mt-3 rounded-lg px-3 py-2 text-sm font-medium ${tone}`}>
         {Math.abs(a.p_to - a.p_from) < 0.005
           ? t('flow.chances_now', { pct: pct(a.p_to) }, `Chance today: ${pct(a.p_to)}. Switch on actions to raise it.`)
@@ -233,10 +236,10 @@ function ActionsCard({ tl, clientId, active, listed, ideasLoading, onToggle, onA
 
 /** Page 2: every goal on one timeline, and the actions for the first goal that fails. */
 export function MainPage({ clientId, tl, goals, active, listed, loading, ideasLoading, onToggle, onActivateAll, onDelete, onDetails, onLever,
-  onFocus, onSaveGoal, onDeleteGoal, onPro, onFacts, onGoals, onMoreIdeas }: {
+  onScenarios, onFocus, onSaveGoal, onDeleteGoal, onPro, onFacts, onGoals, onMoreIdeas }: {
   clientId: string; tl: Timeline; goals: GoalSpec[]; active: string[]; listed: string[]; loading: boolean; ideasLoading: Record<string, boolean>
   onToggle: (id: string, on: boolean) => void; onActivateAll: (ids: string[]) => void; onDelete: (id: string) => void
-  onDetails: (id: string) => void; onLever: (id: string) => void; onFocus: (goalId: string) => void
+  onDetails: (id: string) => void; onLever: (id: string) => void; onScenarios: (ids: string[]) => void; onFocus: (goalId: string) => void
   onSaveGoal: (g: GoalSpec) => void; onDeleteGoal: (goalId: string) => void; onPro: () => void; onFacts: () => void; onGoals: () => void
   onMoreIdeas: () => void
 }) {
@@ -260,7 +263,8 @@ export function MainPage({ clientId, tl, goals, active, listed, loading, ideasLo
 
       {tl.actions && (
         <ActionsCard tl={tl} clientId={clientId} active={active} listed={listed} ideasLoading={!!ideasLoading[tl.actions.goal_id]}
-          onToggle={onToggle} onActivateAll={onActivateAll} onDelete={onDelete} onDetails={onDetails} onLever={onLever} onMoreIdeas={onMoreIdeas} />
+          onToggle={onToggle} onActivateAll={onActivateAll} onDelete={onDelete} onDetails={onDetails} onLever={onLever} onScenarios={onScenarios}
+          onMoreIdeas={onMoreIdeas} />
       )}
 
       <div className="flex justify-between pb-16">

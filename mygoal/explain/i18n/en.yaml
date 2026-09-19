@@ -66,6 +66,7 @@ groups:
   goal_change: "Adjust the goal"
   life_event: "Life events"
   agent: "Your what-ifs"
+  partner: "From other companies"
 
 effort: {none: "No effort", low: "Low effort", medium: "Some effort", high: "Big change"}
 confidence: {structural: "Solid", behavioural: "Depends on habits", estimated: "Estimate"}
@@ -97,6 +98,7 @@ sources:
   user: "You set this"
   market_default: "Standard assumption"
   llm_estimate: "AI estimate, please check"
+  partner: "From another company, please check"
 
 ui:
   risk_rate: "Big bills a year"

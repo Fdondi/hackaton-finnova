@@ -1,11 +1,12 @@
-import { ChevronDown, CircleHelp, Star, Trash2, Wand2 } from 'lucide-react'
+import { ChevronDown, CircleHelp, Handshake, Star, Trash2, Wand2 } from 'lucide-react'
 import { useState } from 'react'
 import type { LeverCard, PlanResponse } from '../api'
 import { chf, onceAmount } from '../format'
 import { useT } from '../i18n'
 import { Button, Card, LeverIcon, Pill, Toggle } from './ui'
 
-const GROUP_ORDER = ['no_lifestyle_cost', 'structural', 'behavioural', 'goal_change', 'agent']
+const GROUP_ORDER = ['no_lifestyle_cost', 'structural', 'behavioural', 'goal_change', 'agent', 'partner']
+const OWN_GROUP = ['agent', 'partner']      // AI ideas and other companies' scenarios get a group of their own
 
 function LeverRow({ lv, onToggle, onWhy, onRemove }: { lv: LeverCard; onToggle: (on: boolean) => void; onWhy: () => void; onRemove?: () => void }) {
   const { t } = useT()
@@ -27,6 +28,7 @@ function LeverRow({ lv, onToggle, onWhy, onRemove }: { lv: LeverCard; onToggle: 
             {onceAmount(lv.details) !== 0 && <span className="text-xs text-ink-2 tabular">{chf(onceAmount(lv.details))} {t('flow.once_short', {}, 'once')}</span>}
             <Pill>{t(`effort.${lv.effort}`)}</Pill>
             <Pill tone={lv.confidence === 'estimated' ? 'llm' : 'neutral'}>{t(`confidence.${lv.confidence}`)}</Pill>
+            {lv.origin === 'partner' && <Pill tone="warning"><Handshake size={11} aria-hidden />{String(lv.details.partner ?? '')}</Pill>}
             {lv.in_plan && <Pill tone="accent"><Star size={11} aria-hidden />{t('ui.in_plan')}</Pill>}
             {lv.trade_off && <Pill tone="bad">{t('ui.trade_off')}</Pill>}
             {Boolean((lv.details as { needs_agreement?: boolean }).needs_agreement) && (
@@ -63,11 +65,11 @@ export function LeverPanel({ plan, onToggle, onUsePlan, onClear, onWhy, onRemove
   const unhelpful = options.filter((l) => !l.helps && !l.active)
   const groups = GROUP_ORDER.map((g) => ({
     g,
-    items: helpful.filter((l) => (g === 'agent' ? l.origin === 'agent' : l.origin !== 'agent' && l.group === g)).sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99)),
+    items: helpful.filter((l) => (OWN_GROUP.includes(g) ? l.origin === g : !OWN_GROUP.includes(l.origin) && l.group === g)).sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99)),
   })).filter((x) => x.items.length)
   const row = (lv: LeverCard) => (
     <LeverRow key={lv.lever_id} lv={lv} onToggle={(on) => onToggle(lv.lever_id, on)} onWhy={() => onWhy(lv.lever_id)}
-      onRemove={lv.origin === 'agent' ? () => onRemove(lv.lever_id) : undefined} />
+      onRemove={OWN_GROUP.includes(lv.origin) ? () => onRemove(lv.lever_id) : undefined} />
   )
 
   return (

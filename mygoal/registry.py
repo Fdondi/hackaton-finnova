@@ -57,6 +57,7 @@ PLUGIN_PACKAGES = [
     "mygoal.explain",
     "mygoal.agent",
     "mygoal.population",
+    "mygoal.partner_api",
 ]
 
 _loaded = False

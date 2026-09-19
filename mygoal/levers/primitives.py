@@ -12,6 +12,7 @@ from typing import Callable, Literal
 
 from pydantic import BaseModel, Field
 
+from ..categorise import load_taxonomy
 from ..model import (
     AllocationDelta, AssumptionBook, ContingentOneOff, GoalChange, IncomeDelta, Investment, LeverImpact, OneOff, RecurringDelta,
     Shock,
@@ -109,6 +110,17 @@ class Substitute(Base):
     add_monthly: Estimate = Field(description="Replacement costs (CHF/month, positive)")
     start_in_months: int = 0
     one_off: Estimate | None = None
+
+
+class ReplaceSpending(Base):
+    """Something the client pays today is replaced by a new price (another insurance plan, tariff or contract).
+    Today's cost comes from the client's account, so whoever proposes it only needs to know the new price."""
+    category: str = Field(description="What it replaces, as a spending category: health_premium, insurance_other, utilities, "
+                                      "housing, transport_car, car_financing, subscriptions, childcare, education")
+    merchant: str | None = Field(None, description="Who is paid today (e.g. the insurer's name), when only that contract is replaced")
+    new_monthly: Estimate = Field(description="The new cost (CHF/month, positive)")
+    start_in_months: int = 0
+    one_off: Estimate | None = Field(None, description="One-off cost of switching (CHF, negative) or a bonus (positive)")
 
 
 class Reallocate(Base):
@@ -268,6 +280,35 @@ def substitute(p: Substitute, ctx: LeverContext, lever_id: str, book: Assumption
     return _impact(p, lever_id, book, confidence="estimated", one_offs=one_offs,
                    recurring=[RecurringDelta(start=start, monthly=p.remove_monthly.dist(removed), label="Costs removed"),
                               RecurringDelta(start=start, monthly=p.add_monthly.dist(added).scaled(-1), label="Replacement costs")])
+
+
+def current_spending(ctx: LeverContext, category: str, merchant: str | None = None) -> float:
+    """What the client pays today (CHF/month): that merchant's active recurring payments, else the whole category."""
+    if merchant:
+        m = merchant.lower()
+        hits = [r for r in ctx.profile.recurring
+                if r.active and r.monthly_equivalent < 0 and m in f"{r.merchant} {r.counterparty or ''}".lower()]
+        if hits:
+            return -sum(r.monthly_equivalent for r in hits)
+    return max(ctx.profile.monthly(category), 0.0)
+
+
+@primitive("replace_spending", ReplaceSpending, "Replace something the client pays today by a new price (another insurance "
+           "plan, tariff or contract); today's cost is read from the client's account.")
+def replace_spending(p: ReplaceSpending, ctx: LeverContext, lever_id: str, book: AssumptionBook) -> LeverImpact:
+    start = add_months(ctx.start, p.start_in_months)
+    seen = round(current_spending(ctx, p.category, p.merchant), 2)
+    what = p.merchant or load_taxonomy().label(p.category)
+    now = book.get("current_monthly", seen, label=f"You pay today ({what})", unit="CHF/month", source="transactions", step=5,
+                   needs_confirmation=not seen, note=None if seen else "Not seen in your account: please enter what you pay today")
+    new = p.new_monthly.read(book, "new_monthly")
+    one_offs = []
+    if p.one_off is not None:
+        v = p.one_off.read(book, "one_off")
+        one_offs.append(OneOff(at=start, amount=p.one_off.dist(v), label=p.title))
+    return _impact(p, lever_id, book, confidence="estimated", one_offs=one_offs,
+                   recurring=[RecurringDelta(start=start, monthly=fixed(now), category=p.category, label="Today's cost stops"),
+                              RecurringDelta(start=start, monthly=p.new_monthly.dist(new).scaled(-1), category=p.category, label=p.title)])
 
 
 @primitive("reallocate", Reallocate, "Move money between cash, investments and pillar 3a (once and/or monthly).")

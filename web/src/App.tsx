@@ -8,6 +8,7 @@ import { LeverPanel } from './components/LeverPanel'
 import { RiskCard } from './components/RiskCard'
 import { SpendingCard } from './components/SpendingCard'
 import { StandTiles } from './components/StandTiles'
+import { ScenarioBox } from './components/ScenarioBox'
 import { WhatIfBox } from './components/WhatIfBox'
 import { WhyDrawer } from './components/WhyDrawer'
 import { I18nContext, useT, type Strings } from './i18n'
@@ -142,12 +143,16 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
     deleted.current.add(id)
     setActive((a) => a.filter((x) => x !== id))
     setListed((l) => l.filter((x) => x !== id))
-    if (id.startsWith('whatif:') && clientId) api.removeLever(clientId, id).then(() => setVersion((v) => v + 1)).catch(() => {})
+    if ((id.startsWith('whatif:') || id.startsWith('scenario:')) && clientId) api.removeLever(clientId, id).then(() => setVersion((v) => v + 1)).catch(() => {})
     else setVersion((v) => v + 1)
   }, [clientId])
   const addAction = useCallback((id: string) => {           // a what-if the client accepted, or "move later"
     setListed((l) => (l.includes(id) ? l : [...l, id]))
     setActive((a) => (a.includes(id) ? a : [...a, id]))
+    setVersion((v) => v + 1)
+  }, [])
+  const addScenarios = useCallback((ids: string[]) => {     // another company's options: listed, off until ticked
+    setListed((l) => [...l, ...ids.filter((i) => !l.includes(i))])
     setVersion((v) => v + 1)
   }, [])
   const saveGoal = useCallback(async (g: GoalSpec) => {
@@ -187,7 +192,15 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
     return () => { clearTimeout(timer); ctrl.abort() }
   }, [clientId, goalId, active, overrides, lang, version, page])
 
-  const toggle = useCallback((id: string, on: boolean) => setActive((a) => (on ? [...a.filter((x) => x !== id), id] : a.filter((x) => x !== id))), [])
+  // alternatives (e.g. an insurer's plan variants) exclude each other: switching one on switches the others off
+  const excludesOf = useCallback((id: string): string[] => {
+    const card = timeline?.cards[id] ?? plan?.levers.find((l) => l.lever_id === id)
+    return (card?.details as { excludes?: string[] } | undefined)?.excludes ?? []
+  }, [timeline, plan])
+  const toggle = useCallback((id: string, on: boolean) => {
+    const ex = on ? excludesOf(id) : []
+    setActive((a) => (on ? [...a.filter((x) => x !== id && !ex.includes(x)), id] : a.filter((x) => x !== id)))
+  }, [excludesOf])
   const setOverride = useCallback((scope: string, key: string, value: number | null) => {
     setOverrides((o) => {
       const next = { ...o, [scope]: { ...(o[scope] ?? {}) } }
@@ -260,7 +273,7 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
         <div className="p-10 text-ink-2">{t('ui.thinking', {}, 'Loading…')}</div>
       ) : page === 'main' ? (
         <MainPage clientId={clientId} tl={timeline!} goals={confirmed} active={active} listed={listed} loading={loading} ideasLoading={ideasLoading}
-          onToggle={toggle} onActivateAll={activateAll} onDelete={deleteAction} onDetails={setWhyId} onLever={addAction}
+          onToggle={toggle} onActivateAll={activateAll} onDelete={deleteAction} onDetails={setWhyId} onLever={addAction} onScenarios={addScenarios}
           onFocus={setFocus} onSaveGoal={saveGoal} onDeleteGoal={deleteGoal}
           onPro={() => setPage('pro')} onFacts={openFacts} onGoals={() => setPage('goals')}
           onMoreIdeas={() => {
@@ -302,6 +315,7 @@ function Shell({ lang, setLang }: { lang: string; setLang: (l: string) => void }
                     onWhy={setWhy}
                     onRemove={async (id) => { await api.removeLever(clientId, id); setActive((a) => a.filter((x) => x !== id)); setVersion((v) => v + 1) }}>
                     <WhatIfBox clientId={clientId} goalId={goalId!} onLever={addLever} />
+                    <div className="mt-3"><ScenarioBox clientId={clientId} goalId={goalId!} onScenarios={() => setVersion((v) => v + 1)} /></div>
                   </LeverPanel>
                 </div>
               </div>

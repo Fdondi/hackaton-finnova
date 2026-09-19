@@ -1,6 +1,6 @@
 // Typed client for the FastAPI backend. Mirrors mygoal/service.py models.
 
-export type Source = 'transactions' | 'client_data' | 'user' | 'market_default' | 'llm_estimate' | 'population'
+export type Source = 'transactions' | 'client_data' | 'user' | 'market_default' | 'llm_estimate' | 'population' | 'partner'
 
 export interface Assumption {
   key: string
@@ -337,6 +337,24 @@ export interface AdvisorAgenda {
   product_triggers: { product: string; label: string; reason: string; impact: string; timing: string; volume: number | null; lever_id: string | null }[]
 }
 
+/** What we send another company, and what came back as actions (mygoal/partner_api). Kept flat so it reads well. */
+export interface ScenarioImport {
+  source: string
+  via: string
+  ids: string[]
+  titles: string[]
+  rejected: { title: string; error: string }[]
+  fix_prompt: string | null
+  note: string
+  pick_one: boolean
+  sent: Record<string, unknown> | null
+  received: unknown
+}
+
+/** A company whose API speaks the scenario format, connected by the client; `sends` is exactly what it receives. */
+export interface Integration { id: string; name: string; url: string | null; built_in: boolean; sends: Record<string, unknown> }
+export interface Integrations { connected: Integration[]; demo_addresses: string[] }
+
 export type Overrides = Record<string, Record<string, number>>
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
@@ -382,6 +400,16 @@ export const api = {
   factsReading: (client: string, lang: string) => call<FactsReading>(`/clients/${client}/facts/ai?lang=${lang}`),
   timeline: (client: string, body: { active: string[]; overrides: Overrides; lang: string; focus?: string | null; listed?: string[] }, signal?: AbortSignal) =>
     call<Timeline>(`/clients/${client}/timeline`, { method: 'POST', body: JSON.stringify(body), signal }),
+  partnerPrompt: (lang: string) => call<{ prompt: string }>(`/partner-prompt?lang=${lang}`),
+  importScenarios: (client: string, body: { goal_id: string; text: string; lang: string }) =>
+    call<ScenarioImport>(`/clients/${client}/scenarios/import`, { method: 'POST', body: JSON.stringify(body) }),
+  integrations: (client: string, lang: string) => call<Integrations>(`/clients/${client}/integrations?lang=${lang}`),
+  connectIntegration: (client: string, url: string, lang: string) =>
+    call<Integrations>(`/clients/${client}/integrations?lang=${lang}`, { method: 'POST', body: JSON.stringify({ url }) }),
+  disconnectIntegration: (client: string, id: string, lang: string) =>
+    call<Integrations>(`/clients/${client}/integrations/${id}?lang=${lang}`, { method: 'DELETE' }),
+  askIntegration: (client: string, id: string, body: { goal_id: string; lang: string }) =>
+    call<ScenarioImport>(`/clients/${client}/integrations/${id}/ask`, { method: 'POST', body: JSON.stringify(body) }),
   goalIdeas: (client: string, goal: string, lang: string, more = false) =>
     call<{ ids: string[] }>(`/clients/${client}/goals/${goal}/ideas`, { method: 'POST', body: JSON.stringify({ lang, more }) }),
   suggestValue: (client: string, body: { question: string; context?: string; lang: string }) =>

@@ -77,6 +77,30 @@ def test_purchase_loan_does_nothing_until_the_purchase_is_on(fresh):
     assert farm["amount"] >= 24_000
 
 
+def test_borrowing_to_invest_is_a_separate_loan_tied_to_the_investment(fresh):
+    from mygoal import timeline
+    from mygoal.agent.session import Session
+    from mygoal.agent.tools import propose_lever
+    s = Session(client_id="lena", goal_id="home", text="invest 20000 in a fund", lang="en")
+    _, err = propose_lever(fresh, s, {"title": "Index fund", "parts": [
+        {"primitive": "invest", "params": {
+            "amount_once": {"value": 20000, "label": "Invested", "source": "user"},
+            "expected_return": {"value": 0.05, "label": "Return", "source": "market_default"},
+            "volatility": {"value": 0.15, "label": "Volatility", "source": "market_default"}, "in_months": 3}},
+    ]}, created_by="test")
+    assert not err and s.lever_id
+    loan_id = f"loan:{s.lever_id}"
+    plan = fresh.plan("lena", PlanRequest(goal_id="home", active=[s.lever_id], include_cross_goal=False))
+    card = next(c for c in plan.levers if c.lever_id == loan_id)
+    assert card.details["needs_agreement"] and card.details["finances"] == s.lever_id
+    assert any("Borrowing to invest" in n for n in card.details["notes"])
+    assert loan_id not in plan.plan
+    only_loan = timeline.build(fresh, "lena", [loan_id], {}, "en")
+    assert all(x == 0 for x in only_loan.get("debt") or [0])
+    both = timeline.build(fresh, "lena", [s.lever_id, loan_id], {}, "en")
+    assert max(both["debt"]) >= 19_000
+
+
 def test_suggested_rate_stays_inside_the_configured_band(fresh):
     goal = fresh.goal("lena", "world_trip")
     ctx = fresh.lever_context("lena", goal, fresh.planner("lena", goal, {}).base, {})

@@ -119,23 +119,28 @@ def life_event_evidence(svc: "PlanningService", event: str) -> dict[str, Any]:
     return out
 
 
-def primitive_catalogue() -> str:
-    """Compact description of every primitive's parameters, for the LLM tool description."""
+ESTIMATE_RULES = ("Estimate = {value: number, low?: number, high?: number, label: string, unit?: string, "
+                  "source: transactions|user|market_default|llm_estimate|population}. Guesses need source llm_estimate with low and "
+                  "high; numbers from life_event_evidence use source population.")
+
+
+def primitive_catalogue(exclude: tuple[str, ...] = (), estimate_rules: str = ESTIMATE_RULES,
+                        skip: tuple[str, ...] = ("side_effects",)) -> str:
+    """Compact description of every primitive's parameters, for the LLM tool description (and the partner prompt)."""
     lines = []
     for name, d in PRIMITIVES.items():
+        if name in exclude:
+            continue
         fields = []
         for fname, f in d.params.model_fields.items():
-            if fname in ("side_effects",):
+            if fname in skip:
                 continue
             ann = f.annotation
             typ = "Estimate" if ann is Estimate or "Estimate" in str(ann) else getattr(ann, "__name__", str(ann)).replace("typing.", "")
             desc = f" - {f.description}" if f.description else ""
             fields.append(f"    {fname}: {typ}{'' if f.is_required() else ' (optional)'}{desc}")
         lines.append(f"- {name}: {d.description}\n" + "\n".join(fields))
-    return ("Estimate = {value: number, low?: number, high?: number, label: string, unit?: string, "
-            "source: transactions|user|market_default|llm_estimate|population}. Guesses need source llm_estimate with low and high; "
-            "numbers from life_event_evidence use source population.\n"
-            + "\n".join(lines))
+    return estimate_rules + "\n" + "\n".join(lines)
 
 
 def tool_specs(max_questions: int) -> list[ToolSpec]:
@@ -181,8 +186,10 @@ class LeverProposal(BaseModel):
     parts: list[dict[str, Any]]
 
 
-def propose_lever(svc: "PlanningService", session: Session, args: dict[str, Any], created_by: str) -> tuple[str, bool]:
-    """Validate, register and evaluate a lever. Returns (message for the agent, is_error)."""
+def propose_lever(svc: "PlanningService", session: Session, args: dict[str, Any], created_by: str, prefix: str = "whatif",
+                  **custom: Any) -> tuple[str, bool]:
+    """Validate, register and evaluate a lever. Returns (message for the agent, is_error).
+    `custom` goes to the CustomLever as is (e.g. source= for a partner's scenario)."""
     from ..service import CustomLever
     try:
         prop = LeverProposal.model_validate(args)
@@ -201,9 +208,9 @@ def propose_lever(svc: "PlanningService", session: Session, args: dict[str, Any]
     except (ValidationError, KeyError) as exc:
         return f"Rejected, invalid parameters: {exc}", True
 
-    lever_id = session.lever_id or f"whatif:{uuid.uuid4().hex[:8]}"
+    lever_id = session.lever_id or f"{prefix}:{uuid.uuid4().hex[:8]}"
     cl = CustomLever(lever_id=lever_id, title=prop.title, parts=prop.parts, created_by=created_by,
-                     group=prop.group, effort=prop.effort, note=prop.description or None)
+                     group=prop.group, effort=prop.effort, note=prop.description or None, **custom)
     try:
         svc.add_custom_lever(session.client_id, cl)
         evaluation = svc.evaluate_lever(session.client_id, session.goal_id, lever_id)

@@ -66,6 +66,7 @@ groups:
   goal_change: "Ziel anpassen"
   life_event: "Lebensereignisse"
   agent: "Ihre Was-wäre-wenn"
+  partner: "Von anderen Firmen"
 
 effort: {none: "Kein Aufwand", low: "Wenig Aufwand", medium: "Etwas Aufwand", high: "Grosse Änderung"}
 confidence: {structural: "Solide", behavioural: "Hängt von Gewohnheiten ab", estimated: "Schätzung"}
@@ -96,6 +97,7 @@ sources:
   user: "Von Ihnen gesetzt"
   market_default: "Standardannahme"
   llm_estimate: "KI-Schätzung, bitte prüfen"
+  partner: "Von einer anderen Firma, bitte prüfen"
 
 ui:
   explain_worst: "Warum so schlecht?"
@@ -330,6 +332,7 @@ flow:
 
 # ---- engine labels and sentences (mygoal/explain/translate.py) ----
 labels:
+  "Not seen in your account: please enter what you pay today": "In Ihrem Konto nicht gefunden: bitte eintragen, was Sie heute zahlen"
   "Asset split and lawyers": "Vermögensteilung und Anwalt"
   "Baby expected in": "Baby erwartet in"
   "Car costs per month": "Autokosten pro Monat"
@@ -436,6 +439,7 @@ labels:
   "Only 12 months of history: annual bills may be missed": "Nur 12 Monate Verlauf: jährliche Rechnungen könnten fehlen"
 
 label_patterns:
+  - ['You pay today \((.+)\)', 'Sie zahlen heute (\1)']
   - ['Own home in (.+)', 'Eigenheim in \1']
   - ['Retirement at (\d+)', 'Pensionierung mit \1']
   - ['Retire early at (\d+)', 'Frühpensionierung mit \1']
@@ -504,3 +508,34 @@ unit_words:
 
 actions:
   move: "„{label}“ auf {year} verschieben"
+
+partners:
+  title: "Optionen von anderen Firmen"
+  connected: "Verbunden"
+  built_in: "Demo, eingebaut"
+  ask: "Nach Optionen fragen"
+  disconnect: "Trennen"
+  what_we_send: "Was wir senden"
+  sends_note: "Die Frage, das Format, Ihre Sprache und die Kontoverknüpfung, die Sie bei ihnen eingerichtet haben. Nichts aus Ihrem Bankkonto."
+  what_came_back: "Was zurückkam"
+  any_assistant: "Jeder andere Assistent"
+  copy_hint: "Kopieren Sie das in den Chat des anderen Assistenten, wo Sie angemeldet sind, und fügen Sie seine Antwort unten ein. Es enthält nichts über Sie."
+  copy: "Kopieren"
+  copied: "Kopiert"
+  paste_placeholder: "Antwort hier einfügen"
+  add: "Als Massnahmen hinzufügen"
+  added: "{n} Optionen von {source} stehen oben in der Liste."
+  added_one: "1 Option von {source} steht oben in der Liste."
+  pick_one: "Davon können Sie jeweils eine einschalten."
+  rejected: "{n} konnten nicht gelesen werden:"
+  copy_fix: "Korrektur für sie kopieren"
+  from_hint: "Zahlen einer anderen Firma: bitte prüfen"
+  connect_title: "Neue Integration verbinden"
+  how_to_tell: "So erkennen Sie, ob eine andere KI damit funktioniert:"
+  m_chat: "Chat-Assistenten (der Chatbot Ihrer Versicherung, ChatGPT, …)."
+  m_chat_how: "Passt, wenn er eine eingefügte Nachricht lesen und mit einem JSON-Block antworten kann; fast alle können das. Nichts zu verbinden: oben kopieren und einfügen. Ist ein Teil der Antwort nicht lesbar, erhalten Sie eine Korrektur zum Zurückschicken."
+  m_api: "APIs von Firmen."
+  m_api_how: "Passt, wenn die Firma eine „mygoal.scenarios/v1“-Beschreibung veröffentlicht: in der Entwicklerdokumentation, in den App-Einstellungen oder unter https://<ihre Website>/.well-known/mygoal-scenarios. Fügen Sie die Adresse unten ein: Wir prüfen sie, nehmen die Firma in Ihre Liste auf und zeigen genau, was sie erhält."
+  connect: "Prüfen und verbinden"
+  demo: "Demo:"
+  for_developers: "Das Format, für Entwickler"

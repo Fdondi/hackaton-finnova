@@ -107,6 +107,8 @@ class CustomLever(BaseModel):
     group: str = "structural"
     effort: str = "medium"
     note: str | None = None
+    source: str | None = None              # a partner's scenario (mygoal/partner_api): who proposed it
+    excludes: list[str] = Field(default_factory=list)   # alternatives: at most one of them can be on
 
 
 # ---------------------------------------------------------------- workspace
@@ -161,6 +163,16 @@ class PlanningService:
         pop = self.services.get("population")
         st.risk = pop.risk_for(st.ds, st.profile) if pop is not None else None
         st.version += 1
+        self._planners.clear()
+        self._rankings.clear()
+
+    def reset_client(self, client_id: str) -> None:
+        """Forget everything the client did in this session (goals, dismissed suggestions, what-ifs, facts, connected
+        integrations) so the next request starts again from the data. For demos, screenshots and tests."""
+        self.clients.pop(client_id, None)
+        self.partners.reset(client_id)
+        for sid in [k for k, s in self.whatif.sessions.items() if s.client_id == client_id]:
+            del self.whatif.sessions[sid]
         self._planners.clear()
         self._rankings.clear()
 
@@ -246,10 +258,14 @@ class PlanningService:
         parts = [build_primitive(p["primitive"], p["params"], ctx, cl.lever_id, key_prefix=f"{i}." if len(cl.parts) > 1 else "")
                  for i, p in enumerate(cl.parts)]
         lever = parts[0] if len(parts) == 1 else combine(cl.lever_id, cl.title, parts)
-        lever.title, lever.origin = cl.title, "agent"
+        lever.title, lever.origin = cl.title, "partner" if cl.source else "agent"
         lever.group, lever.effort = cl.group, cl.effort
         if cl.note:
             lever.description = cl.note
+        if cl.source:
+            lever.confidence = "estimated"
+            lever.details.update(partner=cl.source, excludes=cl.excludes)
+        lever.excludes = list(cl.excludes)
         return lever
 
     # ---- main question ----
@@ -527,6 +543,14 @@ class PlanningService:
             from .agent import WhatIfEngine
             self._whatif = WhatIfEngine(self)
         return self._whatif
+
+    @property
+    def partners(self):
+        """Scenarios from other companies' assistants: copy/paste prompts, partner APIs, replies pushed to us."""
+        if not hasattr(self, "_partners"):
+            from .partner_api import PartnerDesk
+            self._partners = PartnerDesk(self)
+        return self._partners
 
     def evaluate_lever(self, client_id: str, goal_id: str, lever_id: str, overrides: dict | None = None) -> dict[str, Any]:
         """Effect of one lever on one goal, on its own."""

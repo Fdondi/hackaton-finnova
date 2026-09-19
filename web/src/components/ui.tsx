@@ -1,5 +1,5 @@
 import {
-  Baby, Banknote, Briefcase, Building2, CalendarClock, Car, CircleX, Heart, HeartPulse, House, Landmark, Scissors, Sparkles, Split, Target, TrendingUp,
+  Baby, Banknote, Briefcase, Building2, CalendarClock, Car, CircleX, Handshake, Heart, HeartPulse, House, Landmark, Scissors, Sparkles, Split, Target, TrendingUp,
   type LucideIcon,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
@@ -44,7 +44,7 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
 
 const SOURCE_TONE: Record<Source, Tone> = {
   transactions: 'accent', client_data: 'accent', user: 'good', market_default: 'neutral', llm_estimate: 'llm',
-  population: 'accent',
+  population: 'accent', partner: 'warning',
 }
 
 export function SourceBadge({ source, label }: { source: Source; label: string }) {
@@ -58,9 +58,10 @@ const ICONS: Record<string, LucideIcon> = {
 }
 
 export function LeverIcon({ name, origin }: { name: string | null; origin: string }) {
-  const Icon = origin === 'agent' ? Sparkles : (name && ICONS[name]) || Target
+  const Icon = origin === 'agent' ? Sparkles : origin === 'partner' ? Handshake : (name && ICONS[name]) || Target
+  const tone = origin === 'agent' ? 'bg-llm-wash text-llm' : origin === 'partner' ? 'bg-warning/20 text-ink' : 'bg-accent-wash text-accent'
   return (
-    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${origin === 'agent' ? 'bg-llm-wash text-llm' : 'bg-accent-wash text-accent'}`}>
+    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tone}`}>
       <Icon size={18} aria-hidden />
     </span>
   )
